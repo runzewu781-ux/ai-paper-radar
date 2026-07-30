@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 
@@ -12,6 +12,7 @@ settings = get_settings()
 class HuggingFaceSource:
     def __init__(self):
         self.base_url = settings.hf_api_base
+        self.proxy = settings.hf_proxy or None
         self.headers = {}
         if settings.hf_token:
             self.headers["Authorization"] = f"Bearer {settings.hf_token}"
@@ -23,7 +24,7 @@ class HuggingFaceSource:
             params["date"] = date_str
 
         try:
-            with httpx.Client(timeout=30) as client:
+            with httpx.Client(timeout=30, proxy=self.proxy) as client:
                 resp = client.get(url, headers=self.headers, params=params)
                 resp.raise_for_status()
                 data = resp.json()
@@ -59,9 +60,12 @@ class HuggingFaceSource:
         from app.models.entities import Paper, SourceRecord, MetricSnapshot
 
         stats = {"matched": 0, "not_found": 0, "errors": 0}
-        hf_papers = self.fetch_daily_papers()
 
-        hf_map = {p["arxiv_id_base"]: p for p in hf_papers}
+        hf_map: dict[str, dict] = {}
+        for offset in range(3):
+            day = (datetime.utcnow() - timedelta(days=offset)).strftime("%Y-%m-%d")
+            for p in self.fetch_daily_papers(date_str=day):
+                hf_map.setdefault(p["arxiv_id_base"], p)
 
         for arxiv_id in paper_ids:
             paper = (

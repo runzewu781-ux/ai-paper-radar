@@ -32,36 +32,36 @@ export default function HomePage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && navigate(`/search?q=${encodeURIComponent(search)}`)}
-          placeholder="Search papers..."
+          placeholder="搜索论文..."
           style={{ flex: 1, padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
         />
         <button onClick={handleSync} disabled={syncing} style={{ padding: '10px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-          {syncing ? 'Syncing...' : 'Sync arXiv'}
+          {syncing ? '同步中...' : '同步 arXiv'}
         </button>
       </div>
 
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, fontSize: 13, color: '#666' }}>
-        <span>Last sync: {lastSync?.completed_at ? new Date(lastSync.completed_at).toLocaleString() : 'Never'}</span>
-        <span>New papers: {lastSync?.new_paper_count ?? '-'}</span>
-        <span>Status: {lastSync?.status ?? '-'}</span>
+        <span>上次同步：{lastSync?.completed_at ? new Date(lastSync.completed_at).toLocaleString() : '暂无'}</span>
+        <span>新增论文：{lastSync?.new_paper_count ?? '-'}</span>
+        <span>状态：{lastSync?.status === 'completed' ? '已完成' : lastSync?.status === 'running' ? '运行中' : lastSync?.status === 'failed' ? '失败' : lastSync?.status ?? '-'}</span>
       </div>
 
-      <h2 style={{ fontSize: 16, marginBottom: 12 }}>Domains</h2>
+      <h2 style={{ fontSize: 16, marginBottom: 12 }}>研究领域</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginBottom: 32 }}>
         {domains?.map((d) => (
           <a key={d.slug} href={`/domain/${d.slug}`} style={{ padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 8, textDecoration: 'none', color: '#111' }}>
             <div style={{ fontWeight: 600, fontSize: 14 }}>{d.name_zh}</div>
-            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>{d.paper_count} papers</div>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>{d.paper_count} 篇论文</div>
           </a>
         ))}
       </div>
 
-      <h2 style={{ fontSize: 16, marginBottom: 12 }}>Latest Papers</h2>
+      <h2 style={{ fontSize: 16, marginBottom: 12 }}>最新论文</h2>
       {papers?.items.map((p) => <PaperCard key={p.id} paper={p} />)}
-      {papers?.items.length === 0 && <p style={{ color: '#999' }}>No papers yet. Run a sync first.</p>}
+      {papers?.items.length === 0 && <p style={{ color: '#999' }}>暂无论文，请先执行同步。</p>}
 
       <div style={{ marginTop: 32, padding: 16, border: '1px dashed #d1d5db', borderRadius: 8, color: '#999', fontSize: 13 }}>
-        Long-tail Discovery: Not yet enabled.
+        长尾发现：尚未启用。
       </div>
     </div>
   );

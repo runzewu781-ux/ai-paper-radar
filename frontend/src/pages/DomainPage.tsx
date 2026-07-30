@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
+import { useState } from 'react';
 import { fetchPapers, fetchDomains } from '../api/client';
 import PaperCard from '../components/PaperCard';
 
 export default function DomainPage() {
   const { slug } = useParams<{ slug: string }>();
-  const [page, setPage] = usePageState();
+  const [page, setPage] = useState(1);
 
   const { data: domains } = useQuery({ queryKey: ['domains'], queryFn: fetchDomains });
   const { data, isLoading } = useQuery({
@@ -18,24 +19,19 @@ export default function DomainPage() {
   return (
     <div>
       <h1 style={{ fontSize: 20, marginBottom: 4 }}>{domain?.name_zh || slug}</h1>
-      <p style={{ fontSize: 13, color: '#888', marginBottom: 16 }}>{domain?.name_en} · {data?.total ?? 0} papers</p>
+      <p style={{ fontSize: 13, color: '#888', marginBottom: 16 }}>{domain?.name_en} · {data?.total ?? 0} 篇论文</p>
 
-      {isLoading && <p>Loading...</p>}
+      {isLoading && <p>加载中...</p>}
       {data?.items.map((p) => <PaperCard key={p.id} paper={p} />)}
-      {data?.items.length === 0 && <p style={{ color: '#999' }}>No papers in this domain yet.</p>}
+      {data?.items.length === 0 && <p style={{ color: '#999' }}>该领域暂无论文。</p>}
 
       {data && data.total > 20 && (
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>Prev</button>
-          <span style={{ fontSize: 13 }}>Page {page}</span>
-          <button onClick={() => setPage(page + 1)} disabled={page >= Math.ceil(data.total / 20)}>Next</button>
+          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>上一页</button>
+          <span style={{ fontSize: 13 }}>第 {page} 页</span>
+          <button onClick={() => setPage(page + 1)} disabled={page >= Math.ceil(data.total / 20)}>下一页</button>
         </div>
       )}
     </div>
   );
-}
-
-import { useState } from 'react';
-function usePageState(): [number, (p: number) => void] {
-  return useState(1);
 }

@@ -25,38 +25,38 @@ export default function PapersPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 20, marginBottom: 16 }}>Latest Papers</h1>
+      <h1 style={{ fontSize: 20, marginBottom: 16 }}>最新论文</h1>
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <select value={domain} onChange={(e) => { setDomain(e.target.value); setPage(1); }} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db' }}>
-          <option value="">All Domains</option>
+          <option value="">全部领域</option>
           {domains?.map((d) => <option key={d.slug} value={d.slug}>{d.name_zh}</option>)}
         </select>
         <select value={paperStatus} onChange={(e) => { setPaperStatus(e.target.value); setPage(1); }} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db' }}>
-          <option value="">All Status</option>
-          <option value="new_paper">New Paper</option>
-          <option value="new_version">New Version</option>
+          <option value="">全部状态</option>
+          <option value="new_paper">新论文</option>
+          <option value="new_version">版本更新</option>
         </select>
         <select value={hasCode} onChange={(e) => { setHasCode(e.target.value); setPage(1); }} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db' }}>
-          <option value="">Code: Any</option>
-          <option value="yes">Has Code</option>
-          <option value="no">No Code</option>
+          <option value="">代码：不限</option>
+          <option value="yes">有代码</option>
+          <option value="no">无代码</option>
         </select>
         <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db' }}>
-          <option value="latest">Latest</option>
-          <option value="attention">Attention</option>
+          <option value="latest">最新发布</option>
+          <option value="attention">关注度</option>
         </select>
       </div>
 
-      {isLoading && <p>Loading...</p>}
-      {data && <p style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>{data.total} papers found</p>}
+      {isLoading && <p>加载中...</p>}
+      {data && <p style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>共 {data.total} 篇论文</p>}
       {data?.items.map((p) => <PaperCard key={p.id} paper={p} />)}
-      {data?.items.length === 0 && <p style={{ color: '#999' }}>No papers match your filters.</p>}
+      {data?.items.length === 0 && <p style={{ color: '#999' }}>没有符合条件的论文。</p>}
 
       {data && data.total > 20 && (
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} style={{ padding: '6px 12px' }}>Prev</button>
-          <span style={{ padding: '6px 0', fontSize: 13 }}>Page {page} / {Math.ceil(data.total / 20)}</span>
-          <button onClick={() => setPage(page + 1)} disabled={page >= Math.ceil(data.total / 20)} style={{ padding: '6px 12px' }}>Next</button>
+          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} style={{ padding: '6px 12px' }}>上一页</button>
+          <span style={{ padding: '6px 0', fontSize: 13 }}>第 {page} / {Math.ceil(data.total / 20)} 页</span>
+          <button onClick={() => setPage(page + 1)} disabled={page >= Math.ceil(data.total / 20)} style={{ padding: '6px 12px' }}>下一页</button>
         </div>
       )}
     </div>

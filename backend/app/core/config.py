@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     arxiv_default_days: int = 7
 
     hf_api_base: str = "https://huggingface.co/api"
+    hf_proxy: str = ""
     github_api_base: str = "https://api.github.com"
     s2_api_base: str = "https://api.semanticscholar.org/graph/v1"
     s2_batch_size: int = 500

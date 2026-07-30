@@ -123,7 +123,7 @@ class SyncPipeline:
         logger.info("Classified %d papers", len(papers))
 
     def _translate_new_papers(self):
-        from app.services.translation import translate_title
+        from app.services.translation import translate_title, translate_abstract
 
         papers = (
             self.db.query(Paper)
@@ -137,11 +137,14 @@ class SyncPipeline:
         if not papers:
             return
 
-        logger.info("Translating %d paper titles to Chinese", len(papers))
+        logger.info("Translating %d papers (title + abstract) to Chinese", len(papers))
         for paper in papers:
-            zh = translate_title(paper.title)
-            if zh:
-                paper.title_zh = zh
+            zh_title = translate_title(paper.title)
+            if zh_title:
+                paper.title_zh = zh_title
+            zh_abstract = translate_abstract(paper.abstract)
+            if zh_abstract:
+                paper.summary_zh = zh_abstract
 
         self.db.commit()
         logger.info("Translation complete")
