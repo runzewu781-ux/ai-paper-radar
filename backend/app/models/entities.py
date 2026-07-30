@@ -76,6 +76,13 @@ class Paper(Base):
         back_populates="paper", cascade="all, delete-orphan"
     )
 
+    @property
+    def hf_recommended(self) -> bool:
+        return any(
+            s.source_name == "huggingface" and s.status == "matched"
+            for s in self.source_records
+        )
+
 
 class Tag(Base):
     __tablename__ = "tags"

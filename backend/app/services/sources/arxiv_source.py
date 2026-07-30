@@ -1,4 +1,5 @@
 import re
+import socket
 import time
 import logging
 from datetime import datetime, timedelta
@@ -7,6 +8,8 @@ import arxiv
 
 from app.core.config import get_settings
 from app.schemas.paper import ArxivPaperRaw
+
+socket.setdefaulttimeout(30)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

@@ -21,6 +21,7 @@ class DeduplicationService:
             "new_paper": 0,
             "new_version": 0,
             "existing": 0,
+            "changed_ids": [],
         }
 
         for raw in raw_papers:
@@ -55,6 +56,7 @@ class DeduplicationService:
                 )
                 self.db.add(paper)
                 stats["new_paper"] += 1
+                stats["changed_ids"].append(raw.arxiv_id_base)
 
             elif raw.arxiv_version > existing.arxiv_version:
                 existing.arxiv_version = raw.arxiv_version
@@ -71,6 +73,7 @@ class DeduplicationService:
                     existing.project_url = raw.project_url
                     existing.has_code = True
                 stats["new_version"] += 1
+                stats["changed_ids"].append(raw.arxiv_id_base)
 
             else:
                 existing.last_seen_at = datetime.utcnow()

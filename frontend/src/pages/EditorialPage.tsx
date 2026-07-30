@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { fetchEditorialQueue } from '../api/client';
 import PaperCard from '../components/PaperCard';
+import Reveal from '../components/Reveal';
 
 const TABS: { key: string; label: string }[] = [
   { key: 'new', label: '新发现' },
@@ -19,29 +20,34 @@ export default function EditorialPage() {
   });
 
   return (
-    <div>
-      <h1 style={{ fontSize: 20, marginBottom: 16 }}>编辑工作台</h1>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+    <div className="sec" style={{ paddingTop: 40 }}>
+      <div className="sec-head">
+        <h2>编辑工作台</h2>
+        <span className="count">{TABS.find((t) => t.key === tab)?.label} · {data?.total ?? 0} 篇</span>
+      </div>
+
+      <div className="tabs">
         {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            style={{
-              padding: '6px 16px', fontSize: 13, borderRadius: 4, cursor: 'pointer',
-              border: tab === t.key ? '2px solid #2563eb' : '1px solid #d1d5db',
-              background: tab === t.key ? '#eff6ff' : '#fff',
-              fontWeight: tab === t.key ? 600 : 400,
-            }}
-          >
+          <button key={t.key} className={`tab ${tab === t.key ? 'on' : ''}`} onClick={() => setTab(t.key)}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {isLoading && <p>加载中...</p>}
-      {data && <p style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>"{TABS.find(t => t.key === tab)?.label}" 队列共 {data.total} 篇</p>}
-      {data?.items.map((p) => <PaperCard key={p.id} paper={p} />)}
-      {data?.items.length === 0 && !isLoading && <p style={{ color: '#999' }}>该队列暂无论文。</p>}
+      {isLoading && <div className="skeleton" style={{ width: '40%', height: 16 }} />}
+
+      {!isLoading && data && data.items.length > 0 && (
+        <Reveal className="signal-list">
+          {data.items.map((p, i) => <PaperCard key={p.id} paper={p} index={i} />)}
+        </Reveal>
+      )}
+
+      {!isLoading && data?.items.length === 0 && (
+        <div className="empty">
+          <p>该队列暂无论文</p>
+          <p className="hint">在论文详情页切换编辑状态即可归入此处</p>
+        </div>
+      )}
     </div>
   );
 }

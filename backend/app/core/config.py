@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     scheduler_interval_minutes: int = 60
 
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

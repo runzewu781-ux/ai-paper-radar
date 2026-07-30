@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { fetchPapers } from '../api/client';
 import PaperCard from '../components/PaperCard';
+import Reveal from '../components/Reveal';
 
 export default function SearchPage() {
   const [params] = useSearchParams();
@@ -14,14 +15,36 @@ export default function SearchPage() {
   });
 
   return (
-    <div>
-      <h1 style={{ fontSize: 20, marginBottom: 4 }}>搜索："{q}"</h1>
-      <p style={{ fontSize: 13, color: '#888', marginBottom: 16 }}>共 {data?.total ?? 0} 条结果</p>
+    <div className="sec" style={{ paddingTop: 40 }}>
+      <p className="console-eyebrow">检索</p>
+      <div className="sec-head">
+        <h2>{q ? `"${q}"` : '搜索论文'}</h2>
+        <span className="count">
+          {q ? `${data?.total ?? 0} 条命中` : ''}
+          {q && data?.date_from && data?.date_to ? ` · ${data.date_from} ~ ${data.date_to}` : ''}
+        </span>
+      </div>
 
-      {isLoading && <p>搜索中...</p>}
-      {!q && <p style={{ color: '#999' }}>请输入搜索关键词。</p>}
-      {data?.items.map((p) => <PaperCard key={p.id} paper={p} />)}
-      {q && data?.items.length === 0 && !isLoading && <p style={{ color: '#999' }}>未找到相关论文。</p>}
+      {isLoading && <div className="skeleton" style={{ width: '50%', height: 16 }} />}
+
+      {!q && (
+        <div className="empty">
+          <p>在地址栏用 ?q=关键词 搜索，或从首页搜索框进入</p>
+        </div>
+      )}
+
+      {q && !isLoading && data && data.items.length > 0 && (
+        <Reveal className="signal-list">
+          {data.items.map((p, i) => <PaperCard key={p.id} paper={p} index={i} />)}
+        </Reveal>
+      )}
+
+      {q && !isLoading && data?.items.length === 0 && (
+        <div className="empty">
+          <p>未找到相关论文</p>
+          <p className="hint">当前仅检索标题与摘要文本</p>
+        </div>
+      )}
     </div>
   );
 }

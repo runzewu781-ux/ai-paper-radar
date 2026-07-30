@@ -1,25 +1,37 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { fetchDomains, fetchPapers, fetchSyncRuns, triggerSync } from '../api/client';
+import { fetchDomains, fetchPapers, fetchStats, triggerSync } from '../api/client';
 import PaperCard from '../components/PaperCard';
+import Reveal from '../components/Reveal';
+
+const STATUS_ZH: Record<string, string> = {
+  completed: '已完成',
+  running: '运行中',
+  failed: '失败',
+};
 
 export default function HomePage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [notice, setNotice] = useState(false);
 
   const { data: domains } = useQuery({ queryKey: ['domains'], queryFn: fetchDomains });
-  const { data: papers } = useQuery({ queryKey: ['papers', 'latest'], queryFn: () => fetchPapers({ page_size: 5, sort: 'latest' }) });
-  const { data: syncRuns } = useQuery({ queryKey: ['sync-runs'], queryFn: fetchSyncRuns });
+  const { data: papers } = useQuery({
+    queryKey: ['papers', 'latest'],
+    queryFn: () => fetchPapers({ page_size: 6, sort: 'latest' }),
+  });
+  const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: fetchStats });
 
-  const lastSync = syncRuns?.[0];
+  const totalPapers = stats?.total ?? papers?.total ?? 0;
 
   const handleSync = async () => {
     setSyncing(true);
+    setNotice(false);
     try {
       await triggerSync(7);
-      window.location.reload();
+      setNotice(true);
     } finally {
       setSyncing(false);
     }
@@ -27,41 +39,111 @@ export default function HomePage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && navigate(`/search?q=${encodeURIComponent(search)}`)}
-          placeholder="搜索论文..."
-          style={{ flex: 1, padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
-        />
-        <button onClick={handleSync} disabled={syncing} style={{ padding: '10px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-          {syncing ? '同步中...' : '同步 arXiv'}
-        </button>
-      </div>
+      <Reveal className="console">
+        <div>
+          <p className="console-eyebrow">实时观测 · arXiv cs.AI / CL / LG / CV</p>
+          <h1>
+            每日扫描 arXiv，<em>筛出</em>值得写成科普的论文。
+          </h1>
+          <p className="console-lede">
+            抓取、去重、分类、翻译，再把 Hugging Face 与 GitHub 的热度信号归位——一台为科普选题而生的论文观测台。
+          </p>
+          <div className="search-row">
+            <input
+              className="search-input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && search && navigate(`/search?q=${encodeURIComponent(search)}`)}
+              placeholder="搜索论文标题或摘要，回车跳转"
+            />
+            <button className="btn btn-primary" onClick={handleSync} disabled={syncing}>
+              {syncing ? '同步中…' : '同步 arXiv'}
+            </button>
+          </div>
+          {notice && (
+            <p style={{ marginTop: 12, fontSize: 13, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
+              同步已在后台启动 · 抓取 + 翻译约需 1–3 分钟，完成后刷新页面查看
+            </p>
+          )}
+        </div>
 
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24, fontSize: 13, color: '#666' }}>
-        <span>上次同步：{lastSync?.completed_at ? new Date(lastSync.completed_at).toLocaleString() : '暂无'}</span>
-        <span>新增论文：{lastSync?.new_paper_count ?? '-'}</span>
-        <span>状态：{lastSync?.status === 'completed' ? '已完成' : lastSync?.status === 'running' ? '运行中' : lastSync?.status === 'failed' ? '失败' : lastSync?.status ?? '-'}</span>
-      </div>
+        <div className="telemetry">
+          <p className="telemetry-title">雷达状态</p>
+          <div className="tele-row">
+            <span className="tele-label">同步状态</span>
+            <span className="tele-val">{stats?.last_status ? STATUS_ZH[stats.last_status] || stats.last_status : '尚未运行'}</span>
+          </div>
+          <div className="tele-row">
+            <span className="tele-label">上次完成</span>
+            <span className="tele-val">{stats?.last_sync_at ? stats.last_sync_at.slice(5, 16).replace('T', ' ') : '—'}</span>
+          </div>
+          <div className="tele-row">
+            <span className="tele-label">上次新增</span>
+            <span className="tele-val accent">{stats?.new_in_last_sync ?? 0}</span>
+          </div>
+          <div className="tele-row">
+            <span className="tele-label">HF 已匹配</span>
+            <span className="tele-val accent">{stats?.hf_matched ?? 0}</span>
+          </div>
+          <div className="tele-row">
+            <span className="tele-label">GitHub 已关联</span>
+            <span className="tele-val">{stats?.gh_matched ?? 0}</span>
+          </div>
+          <div className="tele-row">
+            <span className="tele-label">库内论文</span>
+            <span className="tele-val">{totalPapers}</span>
+          </div>
+          <div className="tele-row">
+            <span className="tele-label">数据跨度</span>
+            <span className="tele-val" style={{ fontSize: 12 }}>
+              {stats?.global_date_from && stats?.global_date_to
+                ? `${stats.global_date_from.slice(5)} ~ ${stats.global_date_to.slice(5)}`
+                : '—'}
+            </span>
+          </div>
+        </div>
+      </Reveal>
 
-      <h2 style={{ fontSize: 16, marginBottom: 12 }}>研究领域</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginBottom: 32 }}>
-        {domains?.map((d) => (
-          <a key={d.slug} href={`/domain/${d.slug}`} style={{ padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 8, textDecoration: 'none', color: '#111' }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{d.name_zh}</div>
-            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>{d.paper_count} 篇论文</div>
-          </a>
-        ))}
-      </div>
+      <Reveal className="sec">
+        <div className="sec-head">
+          <h2>研究领域</h2>
+          <span className="count">{domains?.length ?? 0} 个象限</span>
+        </div>
+        <div className="domain-grid">
+          {domains?.map((d) => (
+            <a
+              key={d.slug}
+              href={`/domain/${d.slug}`}
+              className={`domain-cell ${d.paper_count === 0 ? 'empty' : ''}`}
+            >
+              <p className="domain-name">{d.name_zh}</p>
+              <span className="domain-count">{d.paper_count}</span>
+              <span className="domain-count-label">篇</span>
+            </a>
+          ))}
+        </div>
+      </Reveal>
 
-      <h2 style={{ fontSize: 16, marginBottom: 12 }}>最新论文</h2>
-      {papers?.items.map((p) => <PaperCard key={p.id} paper={p} />)}
-      {papers?.items.length === 0 && <p style={{ color: '#999' }}>暂无论文，请先执行同步。</p>}
+      <Reveal className="sec">
+        <div className="sec-head">
+          <h2>最新入库</h2>
+          <a href="/papers" className="count" style={{ textDecoration: 'none' }}>查看全部 →</a>
+        </div>
+        <div className="signal-list">
+          {papers?.items.map((p, i) => <PaperCard key={p.id} paper={p} index={i} />)}
+        </div>
+        {papers?.items.length === 0 && (
+          <div className="empty">
+            <div className="glyph" />
+            <p>雷达尚未开机</p>
+            <p className="hint">点击右上角「同步 arXiv」抓取最近论文</p>
+          </div>
+        )}
+      </Reveal>
 
-      <div style={{ marginTop: 32, padding: 16, border: '1px dashed #d1d5db', borderRadius: 8, color: '#999', fontSize: 13 }}>
-        长尾发现：尚未启用。
+      <div className="longtail">
+        <span className="badge">长尾发现</span>
+        <p>尚未启用——基于引用增长曲线与跨源共振的长尾论文挖掘模块，留待下一阶段接入，此处不伪造结果。</p>
       </div>
     </div>
   );

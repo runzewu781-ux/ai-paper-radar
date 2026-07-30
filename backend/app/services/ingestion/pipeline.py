@@ -28,15 +28,17 @@ class SyncPipeline:
         days: int = 7,
         categories: list[str] | None = None,
         max_results: int | None = None,
+        sync_run: SyncRun | None = None,
     ) -> SyncRun:
-        sync_run = SyncRun(
-            started_at=datetime.utcnow(),
-            status="running",
-            categories=categories or ["cs.AI", "cs.CL", "cs.LG", "cs.CV"],
-        )
-        self.db.add(sync_run)
-        self.db.commit()
-        self.db.refresh(sync_run)
+        if sync_run is None:
+            sync_run = SyncRun(
+                started_at=datetime.utcnow(),
+                status="running",
+                categories=categories or ["cs.AI", "cs.CL", "cs.LG", "cs.CV"],
+            )
+            self.db.add(sync_run)
+            self.db.commit()
+            self.db.refresh(sync_run)
 
         try:
             raw_papers = self.arxiv.fetch_recent(
@@ -49,8 +51,15 @@ class SyncPipeline:
             sync_run.new_paper_count = stats["new_paper"]
             sync_run.new_version_count = stats["new_version"]
 
-            self._classify_new_papers()
-            self._translate_new_papers()
+            changed = stats.get("changed_ids", [])
+            self._classify_papers(changed)
+            self._translate_papers(changed)
+
+            enrich_res = self.run_enrich(changed)
+            hf_res = enrich_res.get("huggingface", {})
+            gh_res = enrich_res.get("github", {})
+            sync_run.hf_match_count = hf_res.get("matched", 0) if isinstance(hf_res, dict) else 0
+            sync_run.github_match_count = gh_res.get("matched", 0) if isinstance(gh_res, dict) else 0
 
             sync_run.status = "completed"
             sync_run.completed_at = datetime.utcnow()
@@ -66,12 +75,8 @@ class SyncPipeline:
         return sync_run
 
     def run_enrich(self, paper_ids: list[str] | None = None) -> dict:
-        if not paper_ids:
-            papers = (
-                self.db.query(Paper.arxiv_id_base)
-                .filter(Paper.paper_status.in_(["new_paper", "new_version"]))
-                .all()
-            )
+        if paper_ids is None:
+            papers = self.db.query(Paper.arxiv_id_base).all()
             paper_ids = [p[0] for p in papers]
 
         results = {}
@@ -90,13 +95,16 @@ class SyncPipeline:
 
         return results
 
-    def _classify_new_papers(self):
+    def _classify_papers(self, arxiv_ids: list[str]) -> None:
         from sqlalchemy import or_
+
+        if not arxiv_ids:
+            return
 
         papers = (
             self.db.query(Paper)
             .filter(
-                Paper.paper_status.in_(["new_paper", "new_version"]),
+                Paper.arxiv_id_base.in_(arxiv_ids),
                 or_(
                     Paper.classification_source != "manual",
                     Paper.classification_source.is_(None),
@@ -122,15 +130,15 @@ class SyncPipeline:
         self.db.commit()
         logger.info("Classified %d papers", len(papers))
 
-    def _translate_new_papers(self):
+    def _translate_papers(self, arxiv_ids: list[str]) -> None:
         from app.services.translation import translate_title, translate_abstract
+
+        if not arxiv_ids:
+            return
 
         papers = (
             self.db.query(Paper)
-            .filter(
-                Paper.paper_status.in_(["new_paper", "new_version"]),
-                Paper.title_zh.is_(None),
-            )
+            .filter(Paper.arxiv_id_base.in_(arxiv_ids), Paper.title_zh.is_(None))
             .all()
         )
 
@@ -148,3 +156,28 @@ class SyncPipeline:
 
         self.db.commit()
         logger.info("Translation complete")
+
+    def backfill_translate(self, limit: int = 20) -> int:
+        from app.services.translation import translate_title, translate_abstract
+
+        papers = (
+            self.db.query(Paper)
+            .filter(Paper.title_zh.is_(None))
+            .order_by(Paper.published_at.desc())
+            .limit(limit)
+            .all()
+        )
+        if not papers:
+            return 0
+
+        logger.info("Backfill translating %d papers", len(papers))
+        for paper in papers:
+            zh_title = translate_title(paper.title)
+            if zh_title:
+                paper.title_zh = zh_title
+            zh_abstract = translate_abstract(paper.abstract)
+            if zh_abstract:
+                paper.summary_zh = zh_abstract
+
+        self.db.commit()
+        return len(papers)

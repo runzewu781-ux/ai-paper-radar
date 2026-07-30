@@ -31,6 +31,7 @@ export interface Paper {
   classification_confidence: number | null;
   classification_source: string | null;
   editorial_status: string;
+  hf_recommended: boolean;
   created_at: string | null;
   modified_at: string | null;
 }
@@ -42,6 +43,8 @@ export interface PaperListResponse {
   items: Paper[];
   filters: Record<string, unknown> | null;
   last_sync_at: string | null;
+  date_from: string | null;
+  date_to: string | null;
 }
 
 export interface Domain {
@@ -86,4 +89,15 @@ export interface Tag {
   tag_type: string;
   primary_domain: string | null;
   status: string;
+}
+
+export interface Stats {
+  total: number;
+  hf_matched: number;
+  gh_matched: number;
+  new_in_last_sync: number;
+  last_sync_at: string | null;
+  last_status: string | null;
+  global_date_from: string | null;
+  global_date_to: string | null;
 }

@@ -85,6 +85,7 @@ class PaperResponse(BaseModel):
     classification_confidence: float | None = None
     classification_source: str | None = None
     editorial_status: str
+    hf_recommended: bool = False
     created_at: datetime | None = None
     modified_at: datetime | None = None
 
@@ -98,6 +99,8 @@ class PaperListResponse(BaseModel):
     items: list[PaperResponse]
     filters: dict | None = None
     last_sync_at: datetime | None = None
+    date_from: str | None = None
+    date_to: str | None = None
 
 
 class TagResponse(BaseModel):

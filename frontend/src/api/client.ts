@@ -1,8 +1,10 @@
 import axios from 'axios';
-import type { PaperListResponse, Paper, Domain, SyncRun, PaperMetrics, Tag } from '../types';
+import type { PaperListResponse, Paper, Domain, SyncRun, PaperMetrics, Tag, Stats } from '../types';
+
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: `${API_BASE}/api`,
 });
 
 export async function fetchPapers(params: Record<string, unknown>): Promise<PaperListResponse> {
@@ -47,6 +49,11 @@ export async function fetchTags(): Promise<Tag[]> {
 
 export async function fetchSyncRuns(): Promise<SyncRun[]> {
   const { data } = await api.get('/sync-runs');
+  return data;
+}
+
+export async function fetchStats(): Promise<Stats> {
+  const { data } = await api.get('/stats');
   return data;
 }
 

@@ -1,20 +1,55 @@
+import logging
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import or_, func
 
-from app.db.session import get_db
+from app.db.session import get_db, SessionLocal
 from app.models.entities import Paper, Tag, PaperTag, SyncRun, MetricSnapshot, GithubRepository, SourceRecord
 from app.schemas.paper import PaperResponse, PaperListResponse, PaperUpdate, SyncRunResponse, TagResponse
 from app.services.ingestion.pipeline import SyncPipeline
 from app.services.classification.classifier import ManualOverride
 from app.services.ranking.attention import compute_attention
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
 @router.get("/health")
 def health():
     return {"status": "ok", "version": "0.1.0"}
+
+
+@router.get("/stats")
+def get_stats(db: Session = Depends(get_db)):
+    total = db.query(Paper).count()
+    hf_matched = (
+        db.query(func.count(func.distinct(SourceRecord.paper_id)))
+        .filter(SourceRecord.source_name == "huggingface", SourceRecord.status == "matched")
+        .scalar()
+        or 0
+    )
+    gh_matched = (
+        db.query(func.count(func.distinct(GithubRepository.paper_id))).scalar() or 0
+    )
+    gdr = db.query(func.min(Paper.published_at), func.max(Paper.published_at)).first()
+    last = (
+        db.query(SyncRun)
+        .filter(SyncRun.status == "completed")
+        .order_by(SyncRun.completed_at.desc())
+        .first()
+    )
+    return {
+        "total": total,
+        "hf_matched": hf_matched,
+        "gh_matched": gh_matched,
+        "new_in_last_sync": last.new_paper_count if last else 0,
+        "last_sync_at": last.completed_at.isoformat() if last and last.completed_at else None,
+        "last_status": last.status if last else None,
+        "global_date_from": gdr[0].strftime("%Y-%m-%d") if gdr and gdr[0] else None,
+        "global_date_to": gdr[1].strftime("%Y-%m-%d") if gdr and gdr[1] else None,
+    }
 
 
 @router.get("/sync-runs", response_model=list[SyncRunResponse])
@@ -26,11 +61,40 @@ def list_sync_runs(db: Session = Depends(get_db)):
 def trigger_arxiv_sync(
     background_tasks: BackgroundTasks,
     days: int = Query(default=7, ge=1, le=30),
+    max_results: int | None = Query(default=None, ge=1, le=2000),
     db: Session = Depends(get_db),
 ):
-    pipeline = SyncPipeline(db)
-    sync_run = pipeline.run_arxiv_sync(days=days)
-    return sync_run
+    run = SyncRun(
+        started_at=datetime.utcnow(),
+        status="running",
+        categories=["cs.AI", "cs.CL", "cs.LG", "cs.CV"],
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    background_tasks.add_task(_bg_sync, run.id, days, max_results)
+    return run
+
+
+def _bg_sync(run_id: int, days: int, max_results: int | None = None) -> None:
+    db = SessionLocal()
+    try:
+        run = db.get(SyncRun, run_id)
+        pipeline = SyncPipeline(db)
+        pipeline.run_arxiv_sync(days=days, max_results=max_results, sync_run=run)
+    except Exception as e:
+        logger.exception("background sync failed: %s", e)
+        try:
+            run = db.get(SyncRun, run_id)
+            if run and run.status == "running":
+                run.status = "failed"
+                run.error_summary = str(e)[:500]
+                run.completed_at = datetime.utcnow()
+                db.commit()
+        except Exception:
+            db.rollback()
+    finally:
+        db.close()
 
 
 @router.post("/sync/enrich")
@@ -38,6 +102,27 @@ def trigger_enrich(db: Session = Depends(get_db)):
     pipeline = SyncPipeline(db)
     results = pipeline.run_enrich()
     return {"status": "completed", "results": results}
+
+
+@router.post("/translate/backfill")
+def trigger_backfill_translate(
+    background_tasks: BackgroundTasks,
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    background_tasks.add_task(_bg_backfill, limit)
+    return {"status": "started", "limit": limit}
+
+
+def _bg_backfill(limit: int) -> None:
+    db = SessionLocal()
+    try:
+        pipeline = SyncPipeline(db)
+        n = pipeline.backfill_translate(limit=limit)
+        logger.info("backfill translate done: %d papers", n)
+    except Exception as e:
+        logger.exception("backfill translate failed: %s", e)
+    finally:
+        db.close()
 
 
 @router.get("/papers", response_model=PaperListResponse)
@@ -100,12 +185,25 @@ def list_papers(
 
     total = q.count()
 
+    dr = (
+        q.order_by(None)
+        .with_entities(func.min(Paper.published_at), func.max(Paper.published_at))
+        .first()
+    )
+    range_from = dr[0].strftime("%Y-%m-%d") if dr and dr[0] else None
+    range_to = dr[1].strftime("%Y-%m-%d") if dr and dr[1] else None
+
     if sort == "attention":
         q = q.order_by(Paper.modified_at.desc())
     else:
         q = q.order_by(Paper.published_at.desc())
 
-    items = q.offset((page - 1) * page_size).limit(page_size).all()
+    items = (
+        q.options(selectinload(Paper.source_records))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
 
     last_sync = db.query(SyncRun.completed_at).filter(
         SyncRun.status == "completed"
@@ -122,6 +220,8 @@ def list_papers(
             "sort": sort,
         },
         last_sync_at=last_sync[0] if last_sync else None,
+        date_from=range_from,
+        date_to=range_to,
     )
 
 
@@ -267,7 +367,13 @@ def editorial_queue(
 ):
     q = db.query(Paper).filter(Paper.editorial_status == status)
     total = q.count()
-    items = q.order_by(Paper.published_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    items = (
+        q.options(selectinload(Paper.source_records))
+        .order_by(Paper.published_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
     return {"total": total, "page": page, "page_size": page_size, "items": [PaperResponse.model_validate(p) for p in items]}
 
 
