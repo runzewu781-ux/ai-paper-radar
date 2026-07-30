@@ -1,0 +1,189 @@
+domains:
+  - slug: llm-nlp
+    name_zh: 大语言模型与自然语言处理
+    name_en: LLM & NLP
+    keywords:
+      - language model
+      - llm
+      - transformer
+      - attention mechanism
+      - text generation
+      - machine translation
+      - summarization
+      - question answering
+      - named entity
+      - sentiment
+      - tokeniz
+      - instruction tuning
+      - rlhf
+      - in-context learning
+      - chain-of-thought
+      - prompt
+      - fine-tun
+    arxiv_categories:
+      - cs.CL
+
+  - slug: ai-agent
+    name_zh: AI Agent与多智能体
+    name_en: AI Agent & Multi-Agent
+    keywords:
+      - agent
+      - multi-agent
+      - tool use
+      - planning
+      - autonomous
+      - workflow
+      - orchestration
+      - function calling
+      - retrieval augmented
+      - rag
+      - memory
+      - reflection
+    arxiv_categories: []
+
+  - slug: computer-vision
+    name_zh: 计算机视觉
+    name_en: Computer Vision
+    keywords:
+      - image classification
+      - object detection
+      - segmentation
+      - pose estimation
+      - depth estimation
+      - visual
+      - convolutional
+      - vit
+      - image recognition
+      - scene understanding
+      - 3d reconstruction
+      - point cloud
+    arxiv_categories:
+      - cs.CV
+
+  - slug: multimodal
+    name_zh: 多模态智能
+    name_en: Multimodal Intelligence
+    keywords:
+      - multimodal
+      - vision-language
+      - vl
+      - clip
+      - image captioning
+      - visual question
+      - text-to-image
+      - cross-modal
+      - multimodal understanding
+    arxiv_categories: []
+
+  - slug: embodied-robotics
+    name_zh: 具身智能与机器人
+    name_en: Embodied AI & Robotics
+    keywords:
+      - robot
+      - manipulation
+      - navigation
+      - locomotion
+      - embodied
+      - sim-to-real
+      - reinforcement learning
+      - policy learning
+      - grasping
+      - autonomous driving
+    arxiv_categories:
+      - cs.RO
+
+  - slug: generative-media
+    name_zh: 生成式图像、视频与音频
+    name_en: Generative Image, Video & Audio
+    keywords:
+      - diffusion
+      - generative
+      - text-to-video
+      - image synthesis
+      - gan
+      - stable diffusion
+      - video generation
+      - audio generation
+      - music generation
+      - text-to-speech
+      - image editing
+      - inpainting
+    arxiv_categories: []
+
+  - slug: ai-safety
+    name_zh: AI安全、对齐与可解释性
+    name_en: AI Safety, Alignment & Interpretability
+    keywords:
+      - safety
+      - alignment
+      - interpretability
+      - explainability
+      - robustness
+      - adversarial
+      - fairness
+      - bias
+      - jailbreak
+      - red team
+      - trustworthy
+      - hallucination
+    arxiv_categories: []
+
+  - slug: ai-for-science
+    name_zh: AI for Science
+    name_en: AI for Science
+    keywords:
+      - protein
+      - drug discovery
+      - molecular
+      - weather prediction
+      - climate
+      - physics
+      - biology
+      - chemistry
+      - medical
+      - clinical
+      - genomics
+      - materials
+    arxiv_categories: []
+
+  - slug: training-systems
+    name_zh: 模型训练、推理与系统优化
+    name_en: Training, Inference & Systems
+    keywords:
+      - training
+      - inference
+      - optimization
+      - quantization
+      - pruning
+      - distillation
+      - efficient
+      - parallel
+      - distributed
+      - gpu
+      - compiler
+      - serving
+      - latency
+      - throughput
+      - mixture of experts
+      - moe
+    arxiv_categories: []
+
+  - slug: ai-society
+    name_zh: AI与社会
+    name_en: AI & Society
+    keywords:
+      - ethics
+      - policy
+      - regulation
+      - social impact
+      - misinformation
+      - deepfake
+      - copyright
+      - labor
+      - education
+      - governance
+      - public
+      - survey
+      - benchmark
+      - evaluation
+    arxiv_categories: []
