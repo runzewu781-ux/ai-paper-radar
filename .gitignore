@@ -18,6 +18,6 @@ venv/
 htmlcov/
 .DS_Store
 Thumbs.db
-huashu-skills/
-khazix-skills/
-taste-skill/
+_archive/
+autopr_test_output/
+.temp_output/

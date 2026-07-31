@@ -180,3 +180,11 @@ frontend/
 4. 公众号文章生成模块
 5. 配图 + 排版
 6. 长尾论文发现算法
+
+## AutoPR 多 Agent 推文生成（引用 + 改造）
+
+`AutoPR/` 目录是上游 [LightChen233/AutoPR](https://github.com/LightChen233/AutoPR)（论文 arXiv:2510.09558）的**本地改造版**，以普通子目录形式纳入本仓库（**非** git submodule）。它把一篇论文 PDF 自动写成带配图的小红书 / Twitter 推文，内部是多 Agent 流水线（写初稿 / 看图描述 / 整合成稿）。
+
+相对上游的改造：接入阿里云百炼（`qwen3.8-max-preview` 文本 + 视觉）、用视觉模型整页直读图表替代 DocLayout-YOLO（移除 YOLO 依赖与权重）、三个入口切到新视觉链路、Gradio 预填配置。来源、改造清单与许可（上游 MIT）详见 [`AutoPR/UPSTREAM.md`](AutoPR/UPSTREAM.md)。
+
+> 实测：用 `2510.09558` PDF 端到端跑通，产出见本地 `autopr_test_output/post.md`（该产物目录被 `.gitignore` 排除，未入库）。
