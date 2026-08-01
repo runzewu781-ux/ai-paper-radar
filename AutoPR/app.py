@@ -12,8 +12,11 @@ from typing import List, Dict, Tuple, Optional
 
 from pragent.backend.text_pipeline import pipeline as run_text_extraction
 from pragent.backend.figure_vision_pipeline import run_figure_extraction_vision
-from pragent.backend.blog_pipeline import generate_text_blog, generate_final_post
+from pragent.backend.blog_pipeline import generate_text_blog, generate_final_post, generate_wechat_post
 from pragent.backend.agents import setup_client, call_text_llm_api
+from pragent.backend.post_clean import clean_khazix, l1_audit, md_to_html
+from pragent.backend.prompts_humanizer import HUMANIZER_QC_SYSTEM_ZH, build_humanizer_report
+from pragent.backend.prompts_wechat import WECHAT_DRAFT_PROMPT_CHINESE
 
 import base64
 import mimetypes
@@ -202,6 +205,7 @@ async def process_pdf(
     vision_model,
     platform,
     language,
+    run_humanizer_qc=True,
     progress=gr.Progress(track_tqdm=True)
 ):
     # Use text_api_key for vision_api_key if it's not provided
@@ -238,17 +242,30 @@ async def process_pdf(
             raise gr.Error("The vision model found no figures/tables on any page.")
 
         progress(0.5, desc="Step 3/5: Generating structured text draft...")
-        blog_draft, source_paper_text = await generate_text_blog(
-            txt_path=str(txt_output_path),
-            api_key=text_api_key,
-            text_api_base=base_url,
-            model=text_model,
-            language=language
-        )
+        if platform == 'wechat':
+            # 公众号长文：卡兹克干净版初稿（no_hierarchical_summary 保留论文细节）
+            blog_draft, source_paper_text = await generate_text_blog(
+                txt_path=str(txt_output_path),
+                api_key=text_api_key,
+                text_api_base=base_url,
+                model=text_model,
+                language='zh',
+                ablation_mode='no_hierarchical_summary',
+                draft_prompt_override=WECHAT_DRAFT_PROMPT_CHINESE
+            )
+        else:
+            blog_draft, source_paper_text = await generate_text_blog(
+                txt_path=str(txt_output_path),
+                api_key=text_api_key,
+                text_api_base=base_url,
+                model=text_model,
+                language=language
+            )
         if not blog_draft or blog_draft.startswith("Error:"):
             raise gr.Error(f"Failed to generate blog draft: {blog_draft}")
         
         progress(0.7, desc="Step 4/5: Generating final post with vision analysis...")
+        eff_platform, eff_lang = ('wechat', 'zh') if platform == 'wechat' else (platform, language)
         final_post_md, assets_info = await generate_final_post(
             blog_draft=blog_draft,
             source_paper_text=source_paper_text,
@@ -260,8 +277,8 @@ async def process_pdf(
             vision_api_base=base_url,
             text_model=text_model,
             vision_model=vision_model,
-            platform=platform,
-            language=language,
+            platform=eff_platform,
+            language=eff_lang,
             post_format='rich'
         )
         if not final_post_md or final_post_md.startswith("Error:"):
@@ -280,20 +297,43 @@ async def process_pdf(
         
         (post_content_dir / "post.md").write_text(final_post_md, encoding='utf-8')
         
-        progress(0.9, desc="Step 5/5: Formatting for rich display...")
-        async with setup_client(text_api_key, base_url) as client:
-            structured_data = await format_post_for_display(
-                final_post_md, assets_info, platform, client, text_model
-            )
-        if not structured_data:
-            raise gr.Error("Failed to format post for display.")
+        progress(0.9, desc="Step 5/5: Finalizing post...")
+        if platform == 'wechat':
+            # 公众号长文：卡兹克 L1 清理 + 审计 + 白底图文页 + 可选 humanizer 只读质检
+            cleaned = clean_khazix(final_post_md)
+            w, p, e, tp, hl = l1_audit(cleaned)
+            print(f"[L1 audit AFTER clean] forbidden_words={w} forbidden_punct={p} emoji={e} topic_tags={tp} hashtag_lines={hl}", flush=True)
+            (post_content_dir / "post.md").write_text(cleaned, encoding='utf-8')
+            final_html = md_to_html(cleaned)
+            (post_content_dir / "index.html").write_text(final_html, encoding='utf-8')
 
-        (post_content_dir / "post.json").write_text(json.dumps(structured_data, indent=2, ensure_ascii=False), encoding='utf-8')
+            if run_humanizer_qc:
+                try:
+                    async with setup_client(text_api_key, base_url) as client:
+                        qc_raw = await call_text_llm_api(client, HUMANIZER_QC_SYSTEM_ZH, cleaned, text_model)
+                    _parsed, _report = build_humanizer_report(qc_raw, cleaned, text_model)
+                    (post_content_dir / "humanizer_report.md").write_text(_report, encoding='utf-8')
+                    if _parsed:
+                        _sc = _parsed.get("scores") or {}
+                        print(f"[humanizer QC] total={_sc.get('total')} verdict={_parsed.get('verdict')} hits={len(_parsed.get('hits') or [])}", flush=True)
+                    else:
+                        print("[humanizer QC] PARSE_FAIL (report still saved)", flush=True)
+                except Exception as e:
+                    print(f"[humanizer QC] ERROR {e!r} (post unaffected)", flush=True)
+        else:
+            async with setup_client(text_api_key, base_url) as client:
+                structured_data = await format_post_for_display(
+                    final_post_md, assets_info, platform, client, text_model
+                )
+            if not structured_data:
+                raise gr.Error("Failed to format post for display.")
 
-        if platform == 'twitter':
-            final_html = render_twitter_thread(structured_data, final_assets)
-        else: # xiaohongshu
-            final_html = render_xiaohongshu_post(structured_data, final_assets)
+            (post_content_dir / "post.json").write_text(json.dumps(structured_data, indent=2, ensure_ascii=False), encoding='utf-8')
+
+            if platform == 'twitter':
+                final_html = render_twitter_thread(structured_data, final_assets)
+            else: # xiaohongshu
+                final_html = render_xiaohongshu_post(structured_data, final_assets)
 
         zip_filename_base = f"PRAgent_post_{platform}_{session_id}"
         zip_path = shutil.make_archive(
@@ -433,7 +473,7 @@ with gr.Blocks(theme=gr.themes.Soft(), css=CUSTOM_CSS) as demo:
 
     demo.queue()
     gr.Markdown("# 🚀 PRAgent: Paper to Social Media Post")
-    gr.Markdown("Upload a research paper PDF, and I will generate a social media post for Twitter or Xiaohongshu, complete with images and platform-specific styling.")
+    gr.Markdown("Upload a research paper PDF, and I will generate a post for Twitter, Xiaohongshu, or WeChat (公众号长文), complete with images and platform-specific styling.")
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -452,8 +492,9 @@ with gr.Blocks(theme=gr.themes.Soft(), css=CUSTOM_CSS) as demo:
                 text_model_input = gr.Textbox(label="Text Model", value=_tmod)
                 vision_model_input = gr.Textbox(label="Vision Model", value=_vmod)
 
-            platform_select = gr.Radio(["twitter", "xiaohongshu"], label="Target Platform", value="twitter")
-            language_select = gr.Radio([("English", "en"), ("Chinese", "zh")], label="Language", value="en")
+            platform_select = gr.Radio(["twitter", "xiaohongshu", "wechat"], label="Target Platform", value="wechat")
+            language_select = gr.Radio([("English", "en"), ("Chinese", "zh")], label="Language", value="zh")
+            run_humanizer_qc = gr.Checkbox(label="Run humanizer-zh read-only QC (+~1 min)", value=True)
 
             generate_btn = gr.Button("✨ Generate Post", variant="primary")
         
@@ -472,7 +513,8 @@ with gr.Blocks(theme=gr.themes.Soft(), css=CUSTOM_CSS) as demo:
             text_model_input,
             vision_model_input,
             platform_select,
-            language_select
+            language_select,
+            run_humanizer_qc
         ],
         outputs=[status_text, output_container, download_button]
     )

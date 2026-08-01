@@ -14,7 +14,11 @@ from tqdm.asyncio import tqdm
 
 from pragent.backend.text_pipeline import pipeline as run_text_extraction
 from pragent.backend.figure_vision_pipeline import run_figure_extraction_vision
-from pragent.backend.blog_pipeline import generate_text_blog, generate_final_post, generate_baseline_post
+from pragent.backend.blog_pipeline import generate_text_blog, generate_final_post, generate_baseline_post, generate_wechat_post
+from pragent.backend.post_clean import clean_khazix, l1_audit
+from pragent.backend.prompts_humanizer import HUMANIZER_QC_SYSTEM_ZH, build_humanizer_report
+from pragent.backend.prompts_wechat import WECHAT_DRAFT_PROMPT_CHINESE
+from pragent.backend.agents import setup_client as _qc_setup_client, call_text_llm_api as _qc_call_llm
 
 def get_pdf_hash(file_path: Path) -> str:
     """Calculates the SHA256 hash of a file's content."""
@@ -50,6 +54,23 @@ def create_output_package(base_dir: Path, md_content: str, assets: list):
         tqdm.write(f"[*] Copied {len(assets)} assets to {assets_dir}")
     else:
         tqdm.write("[*] No assets to package for this post.")
+
+
+async def _run_humanizer_qc(args: argparse.Namespace, cleaned: str, out_dir: Path):
+    """公众号长文 humanizer-zh 只读质检，把 humanizer_report.md 写到 out_dir。"""
+    try:
+        async with _qc_setup_client(args.text_api_key, args.text_api_base) as _qc_client:
+            _qc_raw = await _qc_call_llm(_qc_client, HUMANIZER_QC_SYSTEM_ZH, cleaned, args.text_model)
+        _parsed, _report = build_humanizer_report(_qc_raw, cleaned, args.text_model)
+        _rpath = out_dir / "humanizer_report.md"
+        _rpath.write_text(_report, encoding="utf-8")
+        if _parsed:
+            _sc = _parsed.get("scores") or {}
+            tqdm.write(f"[humanizer QC] total={_sc.get('total')} verdict={_parsed.get('verdict')} hits={len(_parsed.get('hits') or [])} -> {_rpath}")
+        else:
+            tqdm.write(f"[humanizer QC] PARSE_FAIL (report still saved) -> {_rpath}")
+    except Exception as e:
+        tqdm.write(f"[humanizer QC] ERROR {e!r} (post unaffected)")
 
 
 async def process_single_project(project_path: Path, args: argparse.Namespace, platform: str, language: str):
@@ -116,15 +137,28 @@ async def process_single_project(project_path: Path, args: argparse.Namespace, p
             tqdm.write("[*] Skipping figure reading for 'text_only' format.")
 
         tqdm.write("\n--- Stage 3/4: Generating Structured Blog Draft ---")
-        blog_draft, source_paper_text = await generate_text_blog(
-            txt_path=str(txt_output_path),
-            api_key=args.text_api_key,
-            text_api_base=args.text_api_base,
-            model=args.text_model,
-            language=language,
-            disable_qwen_thinking=args.disable_qwen_thinking,
-            ablation_mode=ablation_mode
-        )
+        if platform == 'wechat':
+            # 公众号长文：卡兹克干净版初稿（no_hierarchical_summary 保留论文细节）
+            blog_draft, source_paper_text = await generate_text_blog(
+                txt_path=str(txt_output_path),
+                api_key=args.text_api_key,
+                text_api_base=args.text_api_base,
+                model=args.text_model,
+                language='zh',
+                disable_qwen_thinking=args.disable_qwen_thinking,
+                ablation_mode='no_hierarchical_summary',
+                draft_prompt_override=WECHAT_DRAFT_PROMPT_CHINESE
+            )
+        else:
+            blog_draft, source_paper_text = await generate_text_blog(
+                txt_path=str(txt_output_path),
+                api_key=args.text_api_key,
+                text_api_base=args.text_api_base,
+                model=args.text_model,
+                language=language,
+                disable_qwen_thinking=args.disable_qwen_thinking,
+                ablation_mode=ablation_mode
+            )
         if not blog_draft or blog_draft.startswith("Error:"):
             tqdm.write(f"[!] Failed to generate blog draft. Error: {blog_draft}. Skipping.")
             return
@@ -132,6 +166,7 @@ async def process_single_project(project_path: Path, args: argparse.Namespace, p
 
         tqdm.write("\n--- Stage 4/4: Generating Final Platform-Specific Post ---")
         description_cache_dir = args.cache_dir / "descriptions" if args.cache_dir else None
+        eff_platform, eff_lang = ('wechat', 'zh') if platform == 'wechat' else (platform, language)
         final_post, assets = await generate_final_post(
             blog_draft=blog_draft,
             source_paper_text=source_paper_text,
@@ -143,8 +178,8 @@ async def process_single_project(project_path: Path, args: argparse.Namespace, p
             text_api_base=args.text_api_base,
             vision_model=args.vision_model,
             vision_api_base=args.vision_api_base,
-            platform=platform,
-            language=language,
+            platform=eff_platform,
+            language=eff_lang,
             post_format=post_format,
             pdf_hash=pdf_hash,
             description_cache_dir=str(description_cache_dir) if description_cache_dir else None,
@@ -156,7 +191,16 @@ async def process_single_project(project_path: Path, args: argparse.Namespace, p
             return
         tqdm.write("[✓] Final post generated successfully.")
 
-        create_output_package(final_output_dir, final_post, assets)
+        if platform == 'wechat':
+            # 公众号长文：卡兹克 L1 清理 + 审计 + 可选 humanizer 只读质检
+            cleaned = clean_khazix(final_post)
+            w, p, e, tp, hl = l1_audit(cleaned)
+            tqdm.write(f"[L1 audit AFTER clean] forbidden_words={w} forbidden_punct={p} emoji={e} topic_tags={tp} hashtag_lines={hl}")
+            create_output_package(final_output_dir, cleaned, assets)
+            if not args.skip_humanizer_qc:
+                await _run_humanizer_qc(args, cleaned, final_output_dir)
+        else:
+            create_output_package(final_output_dir, final_post, assets)
         tqdm.write(f"\n✅ Successfully completed processing for project: {project_path.name} (mode: {ablation_mode})")
 
     except Exception as e:
@@ -302,6 +346,20 @@ async def main():
     parser.add_argument("--disable-qwen-thinking", action="store_true", help="Disable the 'thinking' mode for Qwen models by setting enable_thinking=False.")
 
     parser.add_argument(
+        "--platform",
+        type=str,
+        default="auto",
+        choices=["auto", "twitter", "xiaohongshu", "wechat"],
+        help="Target platform. 'auto' infers it from the project folder name (numeric->twitter/en, contains letters->xiaohongshu/zh). Explicit 'wechat' forces the 公众号长文 path (zh)."
+    )
+
+    parser.add_argument(
+        "--skip-humanizer-qc",
+        action="store_true",
+        help="Skip the humanizer-zh read-only QC step for WeChat posts (default: run it and write humanizer_report.md)."
+    )
+
+    parser.add_argument(
         "--ablation",
         type=str,
         default="none",
@@ -407,17 +465,21 @@ async def main():
             continue
             
         folder_name = project_path.name
-        platform, language = None, None
-
-        if folder_name.isdigit():
-            platform = "twitter"
-            language = "en"
-        elif re.search('[a-zA-Z]', folder_name):
-            platform = "xiaohongshu"
-            language = "zh"
+        if args.platform != 'auto':
+            platform = args.platform
+            language = 'zh' if platform in ('wechat', 'xiaohongshu') else 'en'
         else:
-            tqdm.write(f"[*] Skipping folder '{folder_name}' as its name is neither purely numeric nor contains English letters.")
-            continue
+            platform, language = None, None
+
+            if folder_name.isdigit():
+                platform = "twitter"
+                language = "en"
+            elif re.search('[a-zA-Z]', folder_name):
+                platform = "xiaohongshu"
+                language = "zh"
+            else:
+                tqdm.write(f"[*] Skipping folder '{folder_name}' as its name is neither purely numeric nor contains English letters.")
+                continue
 
         if args.baseline_mode:
             coro = process_baseline_project(project_path, args, platform, language, log_lock, log_data, log_file_path)

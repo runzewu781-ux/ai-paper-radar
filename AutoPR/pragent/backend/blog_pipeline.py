@@ -26,6 +26,10 @@ from .prompts import (
     GENERIC_TEXT_ONLY_PROMPT_CHINESE,GENERIC_TEXT_ONLY_PROMPT_ENGLISH,
     BASELINE_FEWSHOT_PROMPT_ENGLISH, BASELINE_FEWSHOT_PROMPT_CHINESE
 )
+from .prompts_wechat import (
+    WECHAT_DRAFT_PROMPT_CHINESE,
+    WECHAT_RICH_PROMPT_CHINESE, WECHAT_TEXT_ONLY_PROMPT_CHINESE,
+)
 TOKEN_THRESHOLD = 8000
 
 PROMPT_MAPPING = {
@@ -37,6 +41,8 @@ PROMPT_MAPPING = {
     ('xiaohongshu', 'rich', 'zh'): XIAOHONGSHU_PROMPT_CHINESE,
     ('xiaohongshu', 'text_only', 'en'): XIAOHONGSHU_TEXT_ONLY_PROMPT_ENGLISH,
     ('xiaohongshu', 'text_only', 'zh'): XIAOHONGSHU_TEXT_ONLY_PROMPT_CHINESE,
+    ('wechat', 'rich', 'zh'): WECHAT_RICH_PROMPT_CHINESE,
+    ('wechat', 'text_only', 'zh'): WECHAT_TEXT_ONLY_PROMPT_CHINESE,
     ('generic', 'rich', 'en'): GENERIC_RICH_PROMPT_ENGLISH,
     ('generic', 'text_only', 'en'): GENERIC_TEXT_ONLY_PROMPT_ENGLISH,
     ('generic', 'rich', 'zh'): GENERIC_RICH_PROMPT_CHINESE,
@@ -66,7 +72,8 @@ async def ocr_image_to_text(image_path: str) -> str:
 
 async def generate_text_blog(
     txt_path: str, api_key: str, text_api_base: str, model: str, language: str,
-    disable_qwen_thinking: bool = False, ablation_mode: str = "none"
+    disable_qwen_thinking: bool = False, ablation_mode: str = "none",
+    draft_prompt_override: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
     Generates a structured, factual blog DRAFT in the specified language. (Stage 1)
@@ -102,7 +109,7 @@ async def generate_text_blog(
             tqdm.write(f"[*] ABLATION ({ablation_reason}): Skipping structured draft generation.")
             return text_for_generation, text_for_generation
 
-        draft_prompt = TEXT_GENERATOR_PROMPT_CHINESE if language == 'zh' else TEXT_GENERATOR_PROMPT
+        draft_prompt = draft_prompt_override or (TEXT_GENERATOR_PROMPT_CHINESE if language == 'zh' else TEXT_GENERATOR_PROMPT)
         generator = BlogGeneratorAgent(draft_prompt, model)
         generated_blog_draft = await generator.run(
             client, 
@@ -301,6 +308,55 @@ async def generate_final_post(
         return final_blog_content, assets_for_packaging
     else:
         return final_blog_content, None
+
+
+async def generate_wechat_post(
+    txt_path: str,
+    text_api_key: str,
+    vision_api_key: str,
+    text_api_base: str,
+    vision_api_base: str,
+    text_model: str,
+    vision_model: str,
+    precomputed_items: Optional[List[Dict]] = None,
+    post_format: str = 'rich',
+    disable_qwen_thinking: bool = False,
+) -> Tuple[str, Optional[List[Dict]]]:
+    """公众号长文专用薄封装：干净版卡兹克初稿 + wechat rich 成稿。
+
+    Stage 1 走 WECHAT_DRAFT_PROMPT_CHINESE（no_hierarchical_summary 直接截断，不先做层次摘要，
+    保持论文原始细节），Stage 2 走 PROMPT_MAPPING 的 wechat/zh 路径嵌图。
+    返回 (final_post, assets)。
+    """
+    draft, source_text = await generate_text_blog(
+        txt_path=txt_path,
+        api_key=text_api_key,
+        text_api_base=text_api_base,
+        model=text_model,
+        language='zh',
+        ablation_mode='no_hierarchical_summary',
+        draft_prompt_override=WECHAT_DRAFT_PROMPT_CHINESE,
+        disable_qwen_thinking=disable_qwen_thinking,
+    )
+    if not draft or draft.startswith("Error:"):
+        return draft, None
+    final_post, assets = await generate_final_post(
+        blog_draft=draft,
+        source_paper_text=source_text,
+        assets_dir=None,
+        precomputed_items=precomputed_items,
+        text_api_key=text_api_key,
+        vision_api_key=vision_api_key,
+        text_api_base=text_api_base,
+        vision_api_base=vision_api_base,
+        text_model=text_model,
+        vision_model=vision_model,
+        platform='wechat',
+        language='zh',
+        post_format=post_format,
+        disable_qwen_thinking=disable_qwen_thinking,
+    )
+    return final_post, assets
 
 
 async def generate_baseline_post(
