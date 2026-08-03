@@ -21,3 +21,7 @@ Thumbs.db
 _archive/
 autopr_test_output/
 .temp_output/
+
+# generated artifacts (figure workflow)
+AutoPR/output/
+AutoPR/input/
