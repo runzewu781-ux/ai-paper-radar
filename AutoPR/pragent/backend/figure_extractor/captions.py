@@ -18,10 +18,10 @@ class Caption:
 
 
 _FIG_RE = re.compile(
-    r'^(Figure|Fig\.?)\s+(\d+)\s*[.:：]', re.IGNORECASE
+    r'^(Figure|Fig\.?)\s+(\d+)\b', re.IGNORECASE
 )
 _TAB_RE = re.compile(
-    r'^(Table)\s+(\d+)\s*[.:：]', re.IGNORECASE
+    r'^(Table)\s+(\d+)\b', re.IGNORECASE
 )
 _SUB_RE = re.compile(r'\((\w)\)', re.IGNORECASE)
 

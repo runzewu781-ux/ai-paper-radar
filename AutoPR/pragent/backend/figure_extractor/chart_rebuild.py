@@ -83,23 +83,24 @@ def build_config(chart_id, title, meta, rows, unit, outfile):
 async def rebuild_chart(image_path, out_html, api_key, api_base, model="qwen3.8-max-preview"):
     img = Image.open(str(image_path))
     data = await extract_chart_data(img, api_key, api_base, model)
-    if not data or not data.get("data"):
+    if not data or not data.get("data_zh"):
         return None, "no data extracted"
     chart_id = data.get("chart_id")
     if chart_id not in LIEFLAT_SNIPPET_IDS:
         chart_id = "F5"
-    rows, unit, chart_id = adapt(chart_id, data.get("data"))
+    rows, unit, chart_id = adapt(chart_id, data.get("data_zh"))
     if not rows:
         return None, "empty after adapt"
-    cfg = build_config(chart_id, data.get("title", ""), data.get("title", "")[:40],
-                       rows, unit, out_html)
+    title_zh = data.get("title_zh", "") or ""
+    cfg = build_config(chart_id, title_zh, title_zh[:40], rows, unit, out_html)
     cfg_path = Path(str(out_html) + ".json")
     cfg_path.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
     r = subprocess.run(["node", "scripts/build.mjs", str(cfg_path)],
                        cwd=str(LIEFLAT_DIR), capture_output=True, text=True)
     if Path(out_html).exists():
-        return str(out_html), "ok %s cats=%d unit=%d" % (chart_id, len(rows), unit)
-    return None, r.stderr[:300]
+        meta = {"explanation_zh": data.get("explanation_zh", "")}
+        return str(out_html), "ok %s cats=%d unit=%d" % (chart_id, len(rows), unit), meta
+    return None, r.stderr[:300], {}
 
 
 def main():
@@ -109,7 +110,7 @@ def main():
         return
     key = os.getenv("BAILIAN_KEY", "")
     base = os.getenv("BAILIAN_BASE", "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
-    out, msg = asyncio.run(rebuild_chart(sys.argv[1], sys.argv[2], key, base))
+    out, msg, meta = asyncio.run(rebuild_chart(sys.argv[1], sys.argv[2], key, base))
     print(msg, "->", out)
 
 

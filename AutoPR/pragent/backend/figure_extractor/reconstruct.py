@@ -88,10 +88,14 @@ async def extract_chart_data(img, api_key, api_base, model) -> Optional[dict]:
     system = (
         "你是数据提取器。从这张学术图表中抽取数据，并选择最合适的 lieflat 图型。"
         f"可选图型 id 仅限：{', '.join(LIEFLAT_SNIPPET_IDS)}。"
-        "返回严格 JSON：{\"chart_id\": str, \"title\": str(结论式标题), "
-        "\"data\": [[label, number], ...]}。data 至少 2 项，label 为字符串，值为数字。"
+        "所有输出必须用中文。返回严格 JSON："
+        "{\"chart_id\": str, "
+        "\"title_zh\": str(中文结论式标题), "
+        "\"data_zh\": [[中文标签, 数字], ...], "
+        "\"explanation_zh\": str(用一句话向科普读者解释这张图讲了什么、数据含义)}。"
+        "data_zh 至少 2 项，值为数字。"
     )
-    return await _vision_json(img, system, "提取数据并选图型，只返回 JSON。", api_key, api_base, model)
+    return await _vision_json(img, system, "提取数据并翻译成中文，只返回 JSON。", api_key, api_base, model)
 
 
 async def describe_structure(img, api_key, api_base, model) -> Optional[dict]:
@@ -99,9 +103,10 @@ async def describe_structure(img, api_key, api_base, model) -> Optional[dict]:
         "你是科研插图结构分析师。读懂这张非数据流程/框架图，拆解其结构。"
         "返回严格 JSON：{\"role\": str(总览/流程/框架/系统/任务), "
         "\"stages\": [str, ...](阶段或模块名), \"flow\": str(信息如何流动), "
-        "\"keep\": [str, ...](必须保留的术语), \"drop\": [str, ...](可丢弃的装饰)}。"
+        "\"keep\": [str, ...](必须保留的术语), \"drop\": [str, ...](可丢弃的装饰), "
+        "\"explanation_zh\": str(用中文向科普读者解释这张图的机制/流程，避免只描述图形本身)}。"
     )
-    return await _vision_json(img, system, "分析结构，只返回 JSON。", api_key, api_base, model)
+    return await _vision_json(img, system, "分析结构并给出中文解释，只返回 JSON。", api_key, api_base, model)
 
 
 async def prepare_skill_inputs(

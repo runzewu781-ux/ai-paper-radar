@@ -21,6 +21,10 @@ figure.viz iframe { display: block; width: 100%; border: none; background: #F0EF
                     border-radius: 4px; }
 figure.viz figcaption { font-size: .82rem; color: #666; font-style: italic;
                         margin-top: .5rem; font-family: -apple-system, sans-serif; }
+figure.viz .explain { font-size: .9rem; color: #3a3a35; background: #f4f2ec;
+                      border-left: 3px solid #8b7355; padding: .55rem .85rem;
+                      margin: .6rem 0 0; border-radius: 3px; line-height: 1.7;
+                      font-family: -apple-system, sans-serif; }
 .badge { display: inline-block; font-size: .7rem; font-family: -apple-system, sans-serif;
          color: #fff; background: #8b7355; border-radius: 3px; padding: 1px 6px;
          margin-right: 6px; vertical-align: middle; }
@@ -44,23 +48,33 @@ def _find_refs(text: str) -> set:
     return {int(m) for m in _REF_RE.findall(text)}
 
 
+def _find_refs_pairs(text: str) -> list:
+    out = []
+    for m in re.finditer(r'(Figure|Fig\.?|Table)\s*[:：]?\s*(\d+)', text, re.IGNORECASE):
+        kind = "table" if m.group(1).lower() == "table" else "figure"
+        out.append((kind, int(m.group(2))))
+    return out
+
+
 def _visual_figure(number: int, kind: str, manifest_item: Optional[Dict],
                    reconstructed: Dict[str, Dict], base_dir: Path) -> Optional[str]:
-    recon = reconstructed.get("%s_%d" % (kind, number))
+    recon = reconstructed.get("%s_%d" % (kind, number)) or {}
     caption = manifest_item.get("caption", "") if manifest_item else ""
+    explain = recon.get("explanation_zh", "") or ""
+    xplain_html = ('<p class="explain">%s</p>' % _esc(explain)) if explain else ""
 
-    if recon and recon.get("type") == "lieflat":
+    if recon.get("type") == "lieflat":
         html_path = Path(recon["html_path"])
         if html_path.exists():
             inner = html_path.read_text(encoding="utf-8")
             badge = '<span class="badge">数据图 · lieflat 重构</span>'
             return ('<figure class="viz"><iframe srcdoc="%s" height="%s"></iframe>'
-                    '<figcaption>%s%s</figcaption></figure>'
-                    % (_esc_attr(inner), recon.get("height", 560), badge, _esc(caption)))
+                    '<figcaption>%s%s</figcaption>%s</figure>'
+                    % (_esc_attr(inner), recon.get("height", 560), badge, _esc(caption), xplain_html))
 
     img_path = None
     badge = ""
-    if recon and recon.get("type") == "image":
+    if recon.get("type") == "image":
         p = Path(recon["path"])
         if p.exists():
             img_path = p
@@ -74,8 +88,8 @@ def _visual_figure(number: int, kind: str, manifest_item: Optional[Dict],
     if img_path is None:
         return None
     return ('<figure class="viz"><img src="%s" alt="%s">'
-            '<figcaption>%s%s</figcaption></figure>'
-            % (_img_b64(img_path), _esc(caption), badge, _esc(caption)))
+            '<figcaption>%s%s</figcaption>%s</figure>'
+            % (_img_b64(img_path), _esc(caption), badge, _esc(caption), xplain_html))
 
 
 def render_final_html(
@@ -116,9 +130,7 @@ def render_final_html(
         else:
             body.append("<p>%s</p>" % _esc(text))
 
-        refs = _find_refs(text)
-        for num in sorted(refs):
-            kind = "table" if re.search(r'Table\s*[:：]?\s*%d\b' % num, text, re.I) else "figure"
+        for kind, num in _find_refs_pairs(text):
             key = (kind, num)
             if key in seen:
                 continue

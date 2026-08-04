@@ -23,6 +23,10 @@ export default function HomePage() {
     queryFn: () => fetchPapers({ page_size: 6, sort: 'latest' }),
   });
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: fetchStats });
+  const { data: hfPapers } = useQuery({
+    queryKey: ['papers', 'hf'],
+    queryFn: () => fetchPapers({ hf_matched: true, page_size: 6, sort: 'latest' }),
+  });
 
   const totalPapers = stats?.total ?? papers?.total ?? 0;
 
@@ -102,6 +106,24 @@ export default function HomePage() {
             </span>
           </div>
         </div>
+      </Reveal>
+
+      <Reveal className="sec">
+        <div className="sec-head">
+          <h2>HF 推荐</h2>
+          <a href="/papers?hf=1" className="count" style={{ textDecoration: 'none' }}>
+            查看全部 {hfPapers?.total ?? 0} 篇 →
+          </a>
+        </div>
+        <p className="hint" style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--muted)' }}>
+          被 Hugging Face 收录推荐的论文——社区热度信号，科普选题的高价值候选。
+        </p>
+        <div className="signal-list">
+          {hfPapers?.items.map((p, i) => <PaperCard key={p.id} paper={p} index={i} />)}
+        </div>
+        {hfPapers?.items.length === 0 && (
+          <div className="empty"><p>暂无 HF 匹配论文</p></div>
+        )}
       </Reveal>
 
       <Reveal className="sec">

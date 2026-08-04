@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -55,7 +56,10 @@ class KeywordRuleClassifier:
             score = 0.0
             reasons = []
 
-            kw_hits = sum(1 for kw in rule.keywords if kw in text)
+            kw_hits = sum(
+                1 for kw in rule.keywords
+                if re.search(r"\b" + re.escape(kw) + r"\b", text)
+            )
             if kw_hits > 0:
                 score += kw_hits * 2.0
                 reasons.append(f"{kw_hits} keyword hits")
@@ -73,7 +77,7 @@ class KeywordRuleClassifier:
 
         if not scores:
             return ClassificationResult(
-                primary_domain="ai-society",
+                primary_domain="other",
                 confidence=0.1,
                 reason="no keyword match, default fallback",
                 source="rule",

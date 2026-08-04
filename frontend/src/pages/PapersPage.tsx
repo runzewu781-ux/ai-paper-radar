@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { fetchPapers, fetchDomains } from '../api/client';
 import PaperCard from '../components/PaperCard';
 import Reveal from '../components/Reveal';
@@ -7,20 +8,23 @@ import Reveal from '../components/Reveal';
 const PAGE_SIZE = 20;
 
 export default function PapersPage() {
+  const [searchParams] = useSearchParams();
   const [domain, setDomain] = useState('');
   const [paperStatus, setPaperStatus] = useState('');
   const [hasCode, setHasCode] = useState('');
+  const [hf, setHf] = useState(searchParams.get('hf') === '1' ? 'yes' : '');
   const [sort, setSort] = useState('latest');
   const [page, setPage] = useState(1);
 
   const { data: domains } = useQuery({ queryKey: ['domains'], queryFn: fetchDomains });
   const { data, isLoading } = useQuery({
-    queryKey: ['papers', domain, paperStatus, hasCode, sort, page],
+    queryKey: ['papers', domain, paperStatus, hasCode, hf, sort, page],
     queryFn: () =>
       fetchPapers({
         domain: domain || undefined,
         paper_status: paperStatus || undefined,
         has_code: hasCode === 'yes' ? true : hasCode === 'no' ? false : undefined,
+        hf_matched: hf === 'yes' ? true : undefined,
         sort,
         page,
         page_size: PAGE_SIZE,
@@ -54,6 +58,10 @@ export default function PapersPage() {
             <option value="">代码：不限</option>
             <option value="yes">有代码</option>
             <option value="no">无代码</option>
+          </select>
+          <select className="select" value={hf} onChange={(e) => { setHf(e.target.value); setPage(1); }}>
+            <option value="">HF：不限</option>
+            <option value="yes">HF 已匹配</option>
           </select>
           <select className="select" value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="latest">最新发布</option>

@@ -13,13 +13,15 @@ domains:
       - question answering
       - named entity
       - sentiment
-      - tokeniz
+      - tokenization
+      - tokenizer
       - instruction tuning
       - rlhf
       - in-context learning
       - chain-of-thought
       - prompt
-      - fine-tun
+      - fine-tuning
+      - fine-tuned
     arxiv_categories:
       - cs.CL
 
@@ -27,17 +29,16 @@ domains:
     name_zh: AI Agent与多智能体
     name_en: AI Agent & Multi-Agent
     keywords:
-      - agent
+      - llm agent
+      - language agent
+      - autonomous agent
       - multi-agent
+      - web agent
+      - embodied agent
       - tool use
-      - planning
-      - autonomous
-      - workflow
-      - orchestration
       - function calling
+      - orchestration
       - retrieval augmented
-      - rag
-      - memory
       - reflection
     arxiv_categories: []
 
@@ -50,9 +51,10 @@ domains:
       - segmentation
       - pose estimation
       - depth estimation
-      - visual
+      - computer vision
+      - visual recognition
       - convolutional
-      - vit
+      - vision transformer
       - image recognition
       - scene understanding
       - 3d reconstruction
@@ -114,18 +116,19 @@ domains:
     name_zh: AI安全、对齐与可解释性
     name_en: AI Safety, Alignment & Interpretability
     keywords:
-      - safety
-      - alignment
+      - ai safety
+      - value alignment
       - interpretability
       - explainability
-      - robustness
-      - adversarial
-      - fairness
-      - bias
+      - mechanistic interpretability
+      - adversarial attack
+      - adversarial robustness
+      - algorithmic fairness
       - jailbreak
       - red team
-      - trustworthy
-      - hallucination
+      - trustworthy ai
+      - backdoor attack
+      - unlearning
     arxiv_categories: []
 
   - slug: ai-for-science
@@ -144,7 +147,40 @@ domains:
       - clinical
       - genomics
       - materials
+      - spin
+      - magnet
+      - dynamics
+      - force field
+      - neural network potential
+      - condensed matter
+      - pathology
+      - histopathology
+      - medical imaging
     arxiv_categories: []
+
+  - slug: ai-theory
+    name_zh: 算法与理论基础
+    name_en: Algorithms & Theory
+    keywords:
+      - complexity
+      - query complexity
+      - sampling
+      - approximation algorithm
+      - theorem
+      - proof
+      - bound
+      - combinatorial
+      - convergence
+      - regret
+      - voting rule
+      - voting
+      - election
+      - social choice
+      - sparsification
+    arxiv_categories:
+      - cs.DS
+      - cs.CC
+      - cs.GT
 
   - slug: training-systems
     name_zh: 模型训练、推理与系统优化
@@ -173,17 +209,26 @@ domains:
     name_en: AI & Society
     keywords:
       - ethics
-      - policy
+      - ethical
+      - public policy
       - regulation
       - social impact
+      - societal
       - misinformation
+      - disinformation
       - deepfake
       - copyright
-      - labor
-      - education
+      - labor market
       - governance
-      - public
-      - survey
-      - benchmark
-      - evaluation
+      - public opinion
+      - religion
+      - cultural
+      - equity
+      - inclusion
+    arxiv_categories: []
+
+  - slug: other
+    name_zh: 其他
+    name_en: Other
+    keywords: []
     arxiv_categories: []
