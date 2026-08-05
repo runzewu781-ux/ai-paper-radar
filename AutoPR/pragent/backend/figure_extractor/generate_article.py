@@ -51,6 +51,7 @@ async def generate_article(
     dpi: int = 200,
     flow_redraws: Optional[Dict[str, str]] = None,
     draft_prompt_override: Optional[str] = None,
+    style_guide: Optional[str] = None,
     skip_classify: bool = False,
 ) -> Dict[str, str]:
     """运行完整管线，返回各阶段产物路径。"""
@@ -73,11 +74,14 @@ async def generate_article(
     manifest = R.load_manifest(str(figs / "manifest.json"))
 
     # --- Stage 3: 公众号草稿 ---
+    base_prompt = draft_prompt_override or WECHAT_DRAFT_PROMPT_CHINESE
+    if style_guide:
+        base_prompt = base_prompt + "\n\n===== 强制遵循的文风指南 =====\n" + style_guide
     draft, _src = await generate_text_blog(
         txt_path=str(txt), api_key=api_key, text_api_base=api_base, model=model,
         language='zh', disable_qwen_thinking=False,
         ablation_mode='no_hierarchical_summary',
-        draft_prompt_override=draft_prompt_override or WECHAT_DRAFT_PROMPT_CHINESE,
+        draft_prompt_override=base_prompt,
     )
     (out / "draft.md").write_text(draft or "", encoding="utf-8")
     print("[stage3] draft chars =", len(draft or ""))
@@ -149,6 +153,8 @@ async def _main():
     ap.add_argument("--model", default="qwen3.8-max-preview")
     ap.add_argument("--flow-redraw", action="append", default=[], metavar="NUM=PATH",
                     help="流程图重绘，如 4=C:/x/fig4.png")
+    ap.add_argument("--style", default=None, metavar="style.json",
+                    help="文风蒸馏产物(style_distill 输出)，注入生成提示词")
     args = ap.parse_args()
     key = os.getenv("BAILIAN_KEY", "")
     base = os.getenv("BAILIAN_BASE", "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
@@ -156,7 +162,12 @@ async def _main():
     for item in args.flow_redraw:
         num, path = item.split("=", 1)
         redraws[num] = path
-    await generate_article(args.pdf, args.out, key, base, args.model, flow_redraws=redraws)
+    style_guide = None
+    if args.style:
+        data = json.loads(Path(args.style).read_text(encoding="utf-8"))
+        style_guide = data.get("style_guide")
+    await generate_article(args.pdf, args.out, key, base, args.model,
+                           flow_redraws=redraws, style_guide=style_guide)
 
 
 if __name__ == "__main__":
