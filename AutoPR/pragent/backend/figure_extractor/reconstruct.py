@@ -100,7 +100,8 @@ async def extract_chart_data(img, api_key, api_base, model) -> Optional[dict]:
         "\"complex_table\": bool(若原图是稠密科研表格，超过8行、超过2个数值指标列，或含不能安全丢弃的文本列则为true)}, "
         "\"complex_figure\": bool(若原图含多个相互独立的子图/坐标轴，而data_zh只覆盖其中一部分核心信息则为true；"
         "若图中存在完整汇总表，data_zh已忠实覆盖该汇总表所表达的主要比较，则可为false)}, "
-        "\"explanation_zh\": str(用一句话向科普读者解释这张图讲了什么、数据含义)}。"
+        "\"explanation_zh\": str(用一句中性中文解释这张图讲了什么、数据含义；只陈述图中可确认的信息，"
+        "禁用爆款、炸裂、碾压、颠覆、一键、震撼等营销/情绪词，不替读者下判断)}。"
         "relation 描述原图中的真实关系，不是你希望使用的图型。"
         "对于同一类别下两个条件/模型的并列数值，可以保持 relation=comparison，data_zh 使用三列并填写 series_labels。"
         "复杂表格不要为了套图型只摘取一个指标；complex_table=true 时可保留可确认的 data_zh，但后续系统会优先保留原表。"
@@ -146,10 +147,13 @@ async def assess_chart_replacement(
 async def describe_structure(img, api_key, api_base, model) -> Optional[dict]:
     system = (
         "你是科研插图结构分析师。读懂这张非数据流程/框架图，拆解其结构。"
+        "只根据图中可确认的信息描述机制，不补传播效果、产品价值或营销判断。"
+        "中文解释保持中性、具体，禁用爆款、炸裂、碾压、颠覆、一键、震撼、高吸引力等营销/情绪词。"
         "返回严格 JSON：{\"role\": str(总览/流程/框架/系统/任务), "
         "\"stages\": [str, ...](阶段或模块名), \"flow\": str(信息如何流动), "
         "\"keep\": [str, ...](必须保留的术语), \"drop\": [str, ...](可丢弃的装饰), "
-        "\"explanation_zh\": str(用中文向科普读者解释这张图的机制/流程，避免只描述图形本身)}。"
+        "\"explanation_zh\": str(用中性中文向科普读者解释这张图的机制/流程，避免只描述图形本身，"
+        "不得夸大原图没有表达的能力或效果)}。"
     )
     return await _vision_json(img, system, "分析结构并给出中文解释，只返回 JSON。", api_key, api_base, model)
 
