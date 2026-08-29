@@ -10,8 +10,6 @@ try:
 except ImportError:
     AsyncOpenAI = None
 
-LIEFLAT_SNIPPET_IDS = ["F1", "F2", "F4", "F5", "F12", "L11", "L13", "L14", "L15"]
-
 _REF_RE = re.compile(
     r'(?:Figure|Fig\.?|Table)\s*[:：]?\s*(\d+)', re.IGNORECASE
 )
@@ -86,16 +84,30 @@ async def _vision_json(img, system: str, user: str, api_key, api_base, model) ->
 
 async def extract_chart_data(img, api_key, api_base, model) -> Optional[dict]:
     system = (
-        "你是数据提取器。从这张学术图表中抽取数据，并选择最合适的 lieflat 图型。"
-        f"可选图型 id 仅限：{', '.join(LIEFLAT_SNIPPET_IDS)}。"
-        "所有输出必须用中文。返回严格 JSON："
-        "{\"chart_id\": str, "
-        "\"title_zh\": str(中文结论式标题), "
-        "\"data_zh\": [[中文标签, 数字], ...], "
+        "你是科研图表数据提取器，只负责读懂原图的数据和语义，不负责选择可视化模板。"
+        "忠实读取图中可确认的真实数值；不得为了画图修改、补造、插值、排序或重排数据。"
+        "所有输出必须用中文，并返回严格 JSON："
+        "{\"title_zh\": str(中文结论式标题), "
+        "\"data_zh\": [[中文标签, 数字], ...]，"
+        "若原图明确是同一类目的前后/两条件对比，则为 [[中文标签, 前值, 后值], ...]，"
+        "\"semantics\": {"
+        "\"relation\": str，取值仅限 comparison/ranking/time_series/part_to_whole/"
+        "before_after/ordered_stages/funnel/independent_percentages，"
+        "\"value_kind\": str，取值仅限 count/percent/score/measurement/unknown，"
+        "\"unit\": str(图中单位，没有则空字符串), "
+        "\"ordered\": bool(原图标签顺序是否具有时间、阶段或其他语义)}, "
         "\"explanation_zh\": str(用一句话向科普读者解释这张图讲了什么、数据含义)}。"
-        "data_zh 至少 2 项，值为数字。"
+        "relation 描述原图中的真实关系，不是你希望使用的图型。"
+        "data_zh 至少 2 项；无法可靠读取具体数字时不要猜测，返回空 data_zh。"
     )
-    return await _vision_json(img, system, "提取数据并翻译成中文，只返回 JSON。", api_key, api_base, model)
+    return await _vision_json(
+        img,
+        system,
+        "提取数据、单位和数据关系并翻译成中文，只返回 JSON；不要输出任何图型 ID。",
+        api_key,
+        api_base,
+        model,
+    )
 
 
 async def describe_structure(img, api_key, api_base, model) -> Optional[dict]:

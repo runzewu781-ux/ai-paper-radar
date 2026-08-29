@@ -1,6 +1,8 @@
 import asyncio
 import json
-import math
+import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -8,109 +10,142 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from PIL import Image
-from .reconstruct import extract_chart_data, LIEFLAT_SNIPPET_IDS
 
-LIEFLAT_DIR = Path(r"C:\Users\Administrator\Desktop\lieflat-charts-main")
-
-CAPACITY = {
-    "F1": {"max_units": 40, "max_cats": 6},
-    "F5": {"max_units": 40, "max_cats": 8},
-    "F2": {"max_units": None, "max_cats": 30},
-    "F4": {"max_units": None, "max_cats": 6},
-    "F12": {"max_units": 40, "max_cats": 6},
-    "L11": {"max_units": None, "max_cats": 8},
-    "L13": {"max_units": None, "max_cats": 6},
-    "L14": {"max_units": 100, "max_cats": 6},
-    "L15": {"max_units": 100, "max_cats": 8},
-}
-UNIT_CHARTS = {"F1", "F5", "F12"}
+from .reconstruct import extract_chart_data
 
 
-import re
+_ROUTE_ID_RE = re.compile(r'data-chart-id="([A-Z0-9]+)"')
+_ROUTE_RELATION_RE = re.compile(r'data-chart-relation="([a-z_]+)"')
+
+
+def get_lieflat_dir() -> Path:
+    """Resolve the sibling Lieflat repo, with an environment override."""
+    configured = os.getenv("LIEFLAT_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    workspace = Path(__file__).resolve().parents[5]
+    return workspace / "lieflat-charts"
 
 
 def clean_rows(raw):
+    """Validate extracted rows without dropping, sorting, truncating, or scaling them."""
+    if not isinstance(raw, list) or len(raw) < 2:
+        return None
     out = []
-    for row in (raw or []):
-        if isinstance(row, (list, tuple)) and len(row) >= 2:
-            try:
-                out.append([str(row[0]), float(row[1])])
-            except Exception:
-                continue
+    for row in raw:
+        if not isinstance(row, (list, tuple)) or len(row) < 2:
+            return None
+        try:
+            values = [float(value) for value in row[1:]]
+        except (TypeError, ValueError):
+            return None
+        out.append([str(row[0]), *values])
     return out
 
 
-def is_series(labels):
-    if not labels:
-        return False
-    pat = re.compile(r'(19|20)\d{2}$')
-    num = sum(1 for l in labels if pat.search(l) or l.replace('.', '', 1).isdigit())
-    return num > len(labels) * 0.6
-
-
-def adapt(chart_id, rows):
-    rows = clean_rows(rows)
-    if not rows:
-        return [], 1, chart_id
-    labels = [r[0] for r in rows]
-
-    if is_series(labels):
-        rows = rows[:30]
-        return rows, 1, "F2"
-
-    rows.sort(key=lambda r: -r[1])
-    rows = rows[:8]
-    chart_id = "F5"
-    max_v = max(r[1] for r in rows)
-    unit = 1
-    if max_v > CAPACITY["F5"]["max_units"]:
-        unit = math.ceil(max_v / CAPACITY["F5"]["max_units"])
-        rows = [[name, max(1, round(v / unit))] for name, v in rows]
-    return rows, unit, chart_id
-
-
-def build_config(chart_id, title, meta, rows, unit, outfile):
-    charts = [{
-        "id": chart_id,
+def build_config(title, rows, semantics, outfile):
+    chart = {
         "title": title,
-        "meta": meta + (" · 1 tick=%s" % unit if unit > 1 else ""),
-        "src": "%s · reconstructed" % chart_id,
+        "meta": title[:40],
+        "src": "AutoPR · deterministic Lieflat route · reconstructed from paper figure",
         "data": rows,
-    }]
-    return {"skin": "mono", "title": title, "outfile": str(outfile), "charts": charts}
+        "semantics": semantics if isinstance(semantics, dict) else {},
+    }
+    return {
+        "skin": "mono",
+        "title": title,
+        "outfile": str(outfile),
+        "charts": [chart],
+    }
+
+
+def _extract_route(html_path: Path):
+    source = html_path.read_text(encoding="utf-8")
+    id_match = _ROUTE_ID_RE.search(source)
+    relation_match = _ROUTE_RELATION_RE.search(source)
+    return (
+        id_match.group(1) if id_match else "unknown",
+        relation_match.group(1) if relation_match else "unknown",
+    )
+
+
+def render_lieflat_payload(data, out_html, lieflat_dir=None):
+    """Render vision-extracted data through Lieflat's deterministic router."""
+    if not data or not data.get("data_zh"):
+        return None, "no data extracted", {}
+
+    rows = clean_rows(data.get("data_zh"))
+    if not rows:
+        return None, "invalid or incomplete data rows; use original paper figure", {}
+
+    out_html = Path(out_html).resolve()
+    title_zh = data.get("title_zh", "") or "论文数据重构"
+    semantics = data.get("semantics") if isinstance(data.get("semantics"), dict) else {}
+    cfg = build_config(title_zh, rows, semantics, out_html)
+    cfg_path = Path(str(out_html) + ".json")
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    root = Path(lieflat_dir).resolve() if lieflat_dir else get_lieflat_dir().resolve()
+    build_script = root / "scripts" / "build.mjs"
+    if not build_script.exists():
+        return None, "lieflat build script missing: %s" % build_script, {}
+
+    node = shutil.which("node")
+    if not node:
+        return None, "node executable not found", {}
+
+    if out_html.exists():
+        out_html.unlink()
+
+    try:
+        result = subprocess.run(
+            [node, str(build_script), str(cfg_path)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, "lieflat build failed: %s" % exc, {}
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "unknown build error").strip()
+        return None, detail[:600], {}
+    if not out_html.exists():
+        return None, "lieflat reported success but outfile was not created", {}
+
+    chart_id, relation = _extract_route(out_html)
+    meta = {
+        "explanation_zh": data.get("explanation_zh", ""),
+        "chart_id": chart_id,
+        "relation": relation,
+    }
+    return (
+        str(out_html),
+        "ok routed=%s relation=%s cats=%d" % (chart_id, relation, len(rows)),
+        meta,
+    )
 
 
 async def rebuild_chart(image_path, out_html, api_key, api_base, model="qwen3.8-max-preview"):
-    img = Image.open(str(image_path))
-    data = await extract_chart_data(img, api_key, api_base, model)
-    if not data or not data.get("data_zh"):
-        return None, "no data extracted"
-    chart_id = data.get("chart_id")
-    if chart_id not in LIEFLAT_SNIPPET_IDS:
-        chart_id = "F5"
-    rows, unit, chart_id = adapt(chart_id, data.get("data_zh"))
-    if not rows:
-        return None, "empty after adapt"
-    title_zh = data.get("title_zh", "") or ""
-    cfg = build_config(chart_id, title_zh, title_zh[:40], rows, unit, out_html)
-    cfg_path = Path(str(out_html) + ".json")
-    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
-    r = subprocess.run(["node", "scripts/build.mjs", str(cfg_path)],
-                       cwd=str(LIEFLAT_DIR), capture_output=True, text=True)
-    if Path(out_html).exists():
-        meta = {"explanation_zh": data.get("explanation_zh", "")}
-        return str(out_html), "ok %s cats=%d unit=%d" % (chart_id, len(rows), unit), meta
-    return None, r.stderr[:300], {}
+    with Image.open(str(image_path)) as img:
+        data = await extract_chart_data(img, api_key, api_base, model)
+    return render_lieflat_payload(data, out_html)
 
 
 def main():
-    import os
     if len(sys.argv) < 3:
         print("usage: python -m pragent.backend.figure_extractor.chart_rebuild <image> <out.html>")
         return
     key = os.getenv("BAILIAN_KEY", "")
-    base = os.getenv("BAILIAN_BASE", "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
-    out, msg, meta = asyncio.run(rebuild_chart(sys.argv[1], sys.argv[2], key, base))
+    base = os.getenv(
+        "BAILIAN_BASE",
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    )
+    out, msg, _meta = asyncio.run(rebuild_chart(sys.argv[1], sys.argv[2], key, base))
     print(msg, "->", out)
 
 
