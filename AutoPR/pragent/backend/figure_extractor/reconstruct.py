@@ -95,9 +95,16 @@ async def extract_chart_data(img, api_key, api_base, model) -> Optional[dict]:
         "before_after/ordered_stages/funnel/independent_percentages，"
         "\"value_kind\": str，取值仅限 count/percent/score/measurement/unknown，"
         "\"unit\": str(图中单位，没有则空字符串), "
-        "\"ordered\": bool(原图标签顺序是否具有时间、阶段或其他语义)}, "
+        "\"ordered\": bool(原图标签顺序是否具有时间、阶段或其他语义), "
+        "\"series_labels\": [str, str](只有每行明确包含两个条件/系列数值时填写，按数值列顺序), "
+        "\"complex_table\": bool(若原图是稠密科研表格，超过8行、超过2个数值指标列，或含不能安全丢弃的文本列则为true)}, "
+        "\"complex_figure\": bool(若原图含多个相互独立的子图/坐标轴，而data_zh只覆盖其中一部分核心信息则为true；"
+        "若图中存在完整汇总表，data_zh已忠实覆盖该汇总表所表达的主要比较，则可为false)}, "
         "\"explanation_zh\": str(用一句话向科普读者解释这张图讲了什么、数据含义)}。"
         "relation 描述原图中的真实关系，不是你希望使用的图型。"
+        "对于同一类别下两个条件/模型的并列数值，可以保持 relation=comparison，data_zh 使用三列并填写 series_labels。"
+        "复杂表格不要为了套图型只摘取一个指标；complex_table=true 时可保留可确认的 data_zh，但后续系统会优先保留原表。"
+        "多面板复合图不要只抽一个面板就假装重构整图；如果抽取数据不足以等价表达整张图，必须 complex_figure=true。"
         "data_zh 至少 2 项；无法可靠读取具体数字时不要猜测，返回空 data_zh。"
     )
     return await _vision_json(
@@ -108,6 +115,32 @@ async def extract_chart_data(img, api_key, api_base, model) -> Optional[dict]:
         api_base,
         model,
     )
+
+
+async def assess_chart_replacement(
+    img,
+    extracted: Optional[dict],
+    api_key,
+    api_base,
+    model,
+    caption: str = "",
+) -> Optional[dict]:
+    """Decide whether one reconstructed chart can faithfully replace the whole source image."""
+    if not extracted:
+        return {"safe_to_replace": False, "reason": "no extracted data"}
+    system = (
+        "你是科研图表重构的完整性审计器。判断给定结构化数据是否足以替代整张原图，而不会丢失主要、独立的信息。"
+        "严格保守：多面板图若包含多个独立坐标轴/不同指标/不同关系，而抽取数据只覆盖其中一部分，必须 false。"
+        "若原图虽有多个面板，但存在一个清晰的汇总表，抽取数据完整覆盖该汇总表且足以表达题注强调的核心比较，可以 true。"
+        "稠密科研表、流程框架、抽取不完整或无法确认时一律 false。"
+        "只返回严格JSON：{\"safe_to_replace\": bool, \"reason\": str}。"
+    )
+    user = (
+        "题注：" + (caption or "(无)")
+        + "\n结构化抽取：" + json.dumps(extracted, ensure_ascii=False)
+        + "\n判断这份数据能否作为整张原图的等价替代。"
+    )
+    return await _vision_json(img, system, user, api_key, api_base, model)
 
 
 async def describe_structure(img, api_key, api_base, model) -> Optional[dict]:

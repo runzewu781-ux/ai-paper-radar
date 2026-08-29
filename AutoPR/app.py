@@ -243,14 +243,14 @@ async def process_pdf(
 
         progress(0.5, desc="Step 3/5: Generating structured text draft...")
         if platform == 'wechat':
-            # 公众号长文：卡兹克干净版初稿（no_hierarchical_summary 保留论文细节）
+            # 公众号长文：优先使用全文；超长论文才构建层级证据摘要。
             blog_draft, source_paper_text = await generate_text_blog(
                 txt_path=str(txt_output_path),
                 api_key=text_api_key,
                 text_api_base=base_url,
                 model=text_model,
                 language='zh',
-                ablation_mode='no_hierarchical_summary',
+                ablation_mode='none',
                 draft_prompt_override=WECHAT_DRAFT_PROMPT_CHINESE
             )
         else:

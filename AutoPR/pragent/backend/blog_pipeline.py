@@ -30,7 +30,7 @@ from .prompts_wechat import (
     WECHAT_DRAFT_PROMPT_CHINESE,
     WECHAT_RICH_PROMPT_CHINESE, WECHAT_TEXT_ONLY_PROMPT_CHINESE,
 )
-TOKEN_THRESHOLD = 8000
+FULLTEXT_CHAR_LIMIT = int(os.getenv("AUTOPR_FULLTEXT_CHAR_LIMIT", "240000"))
 
 PROMPT_MAPPING = {
     ('twitter', 'rich', 'en'): TWITTER_RICH_TEXT_PROMPT_ENGLISH,
@@ -87,11 +87,18 @@ async def generate_text_blog(
             return "Error: Could not load text file.", None
 
         text_for_generation = ""
-        if len(paper_text) > TOKEN_THRESHOLD: 
+        if len(paper_text) > FULLTEXT_CHAR_LIMIT:
             if ablation_mode == 'no_hierarchical_summary':
-                tqdm.write(f"[*] ABLATION (no_hierarchical_summary): Truncating text to {TOKEN_THRESHOLD} characters.")
-                text_for_generation = paper_text[:TOKEN_THRESHOLD]
+                # This ablation means "do not summarize", not "discard most of the
+                # paper".  Silent prefix truncation caused later sections, tables,
+                # limitations and exact numbers to disappear from the evidence base.
+                tqdm.write("[*] ABLATION (no_hierarchical_summary): Using full paper text without summarization.")
+                text_for_generation = paper_text
             else:
+                tqdm.write(
+                    f"[*] Paper is {len(paper_text)} chars; building a hierarchical evidence digest "
+                    f"(full-text limit={FULLTEXT_CHAR_LIMIT})."
+                )
                 summarized_text = await summarize_long_text(
                     paper_text,
                     model,
@@ -99,9 +106,10 @@ async def generate_text_blog(
                     disable_qwen_thinking=disable_qwen_thinking
                 )
                 if summarized_text.startswith("Error:"):
-                    summarized_text = paper_text[:TOKEN_THRESHOLD]
+                    return summarized_text, None
                 text_for_generation = summarized_text
         else:
+            tqdm.write(f"[*] Using full paper text ({len(paper_text)} chars).")
             text_for_generation = paper_text
         
         if ablation_mode in ['no_logical_draft', 'stage2']:
@@ -172,7 +180,7 @@ async def generate_final_post(
                 cache_file_path = cache_dir / f"{sanitized_model_name}.json"
 
             if cache_file_path and cache_file_path.exists() and ablation_mode not in ['no_visual_analysis', 'stage2']:
-                tqdm.write(f"[✓] Cache hit! Loading all descriptions from {cache_file_path}")
+                tqdm.write(f"[OK] Cache hit! Loading all descriptions from {cache_file_path}")
                 with cache_file_path.open('r', encoding='utf-8') as f:
                     items_with_descriptions = json.load(f)
             
@@ -410,7 +418,7 @@ async def generate_baseline_post(
                     alt_text = ("Table" if item.get('type') == 'table' else "Figure") + f" {i+1}"
                     final_post += f"\n![{alt_text}](./img/{new_asset_filename})"
                     assets_for_packaging.append({'src_path': item['item_path'], 'dest_name': new_asset_filename})
-                tqdm.write(f"[✓] Appended {len(selected_items)} vision items to the baseline post.")
+                tqdm.write(f"[OK] Appended {len(selected_items)} vision items to the baseline post.")
         elif mode == 'with_figure' and assets_dir and Path(assets_dir).is_dir():
             tqdm.write(f"[*] Attaching top 3 figures/tables for 'with_figure' baseline...")
             
@@ -464,7 +472,7 @@ async def generate_baseline_post(
                     
                     final_post += f"\n![{alt_text}](./img/{new_asset_filename})"
                     assets_for_packaging.append({'src_path': str(item_path), 'dest_name': new_asset_filename})
-                tqdm.write(f"[✓] Appended {len(selected_items)} items (figures/tables) to the post.")
+                tqdm.write(f"[OK] Appended {len(selected_items)} items (figures/tables) to the post.")
             else:
                 tqdm.write("[!] Warning: 'with_figure' mode was selected, but no paired items were found.")
 

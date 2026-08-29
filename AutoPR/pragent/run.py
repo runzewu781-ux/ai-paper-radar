@@ -112,7 +112,7 @@ async def process_single_project(project_path: Path, args: argparse.Namespace, p
         if not txt_output_path.exists():
             tqdm.write(f"[!] Text extraction failed for {pdf_path.name}. Skipping.")
             return
-        tqdm.write(f"[✓] Text extracted successfully.")
+        tqdm.write(f"[OK] Text extracted successfully.")
 
         tqdm.write("\n--- Stage 2/4: Reading Figures with Vision Model (YOLO-free) ---")
         pdf_hash = None
@@ -162,7 +162,7 @@ async def process_single_project(project_path: Path, args: argparse.Namespace, p
         if not blog_draft or blog_draft.startswith("Error:"):
             tqdm.write(f"[!] Failed to generate blog draft. Error: {blog_draft}. Skipping.")
             return
-        tqdm.write("[✓] Structured draft generated successfully.")
+        tqdm.write("[OK] Structured draft generated successfully.")
 
         tqdm.write("\n--- Stage 4/4: Generating Final Platform-Specific Post ---")
         description_cache_dir = args.cache_dir / "descriptions" if args.cache_dir else None
@@ -189,7 +189,7 @@ async def process_single_project(project_path: Path, args: argparse.Namespace, p
         if not final_post or final_post.startswith("Error:"):
             tqdm.write(f"[!] Failed to generate final post. Error: {final_post}. Skipping.")
             return
-        tqdm.write("[✓] Final post generated successfully.")
+        tqdm.write("[OK] Final post generated successfully.")
 
         if platform == 'wechat':
             # 公众号长文：卡兹克 L1 清理 + 审计 + 可选 humanizer 只读质检
@@ -247,7 +247,7 @@ async def process_baseline_project(
         if not txt_output_path.exists():
             tqdm.write(f"[!] Text extraction failed for {pdf_path.name}. Skipping.")
             return
-        tqdm.write(f"[✓] Text extracted successfully.")
+        tqdm.write(f"[OK] Text extracted successfully.")
         
         paper_text = txt_output_path.read_text(encoding="utf-8")
 
@@ -297,7 +297,7 @@ async def process_baseline_project(
         if not baseline_post or baseline_post.startswith("Error:"):
             tqdm.write(f"[!] Failed to generate baseline post. Error: {baseline_post}. Skipping.")
             return
-        tqdm.write("[✓] Baseline post generated successfully.")
+        tqdm.write("[OK] Baseline post generated successfully.")
 
         create_output_package(final_output_dir, baseline_post, assets)
         tqdm.write(f"\n✅ Successfully completed baseline processing. Output saved to: {final_output_dir}")

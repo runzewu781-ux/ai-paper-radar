@@ -29,7 +29,7 @@ async def pipeline(pdf_path: str, output_txt_path: str, ablation_mode: str = "no
     if not await convert_html_to_txt(str(intermediate_html_path), output_txt_path):
         tqdm.write("[!] HTML to TXT conversion failed. Aborting pipeline.", file=sys.stderr)
     else:
-        tqdm.write(f"\n[✓] Success! Final text file saved to: {output_txt_path}")
+        tqdm.write(f"\n[OK] Success! Final text file saved to: {output_txt_path}")
 
     tqdm.write(f"\n--- Step 3/3: Cleaning up temporary files ---")
     try:

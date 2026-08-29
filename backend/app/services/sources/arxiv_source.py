@@ -39,8 +39,34 @@ class ArxivSource:
         self.client = arxiv.Client(
             page_size=settings.arxiv_max_results_per_page,
             delay_seconds=settings.arxiv_request_interval,
-            num_retries=3,
+            # arxiv.py retries immediately. For 429/5xx responses we need
+            # explicit exponential backoff instead of hammering the API.
+            num_retries=0,
         )
+
+    def _results_with_backoff(self, search: arxiv.Search):
+        max_attempts = 5
+        retryable = {429, 500, 502, 503, 504}
+        for attempt in range(max_attempts):
+            try:
+                for result in self.client.results(search):
+                    yield result
+                return
+            except arxiv.HTTPError as exc:
+                if exc.status not in retryable or attempt >= max_attempts - 1:
+                    raise
+                # arxiv.py 4.x does not expose Retry-After headers through
+                # HTTPError, so use a bounded exponential delay while also
+                # respecting the configured request interval.
+                delay = max(
+                    float(settings.arxiv_request_interval),
+                    min(60.0, 5.0 * (2 ** attempt)),
+                )
+                logger.warning(
+                    "arXiv HTTP %s; retrying in %.1fs (attempt %d/%d). Existing DB cache is unchanged.",
+                    exc.status, delay, attempt + 2, max_attempts,
+                )
+                time.sleep(delay)
 
     def fetch_recent(
         self,
@@ -67,7 +93,7 @@ class ArxivSource:
             "Fetching arXiv papers: categories=%s, days=%d", categories, days
         )
 
-        for result in self.client.results(search):
+        for result in self._results_with_backoff(search):
             if result.published.replace(tzinfo=None) < cutoff:
                 break
 

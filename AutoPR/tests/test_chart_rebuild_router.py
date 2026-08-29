@@ -108,6 +108,63 @@ class ChartRouterBridgeTests(unittest.TestCase):
         self.assertIn("性能连续提升", html)
         self.assertIn("data-chart-id=&quot;F2&quot;", html)
 
+    def test_explicit_title_does_not_drop_first_paragraph(self):
+        final = self.tmp / "title.html"
+        render_final_html(
+            "第一段必须保留。\n\n第二段也要保留。",
+            {"items": []},
+            str(self.tmp),
+            str(final),
+            title="独立标题",
+        )
+        html = final.read_text(encoding="utf-8")
+        self.assertIn("<h1>独立标题</h1>", html)
+        self.assertIn("<p>第一段必须保留。</p>", html)
+        self.assertIn("<p>第二段也要保留。</p>", html)
+
+    def test_title_equal_to_first_block_is_not_duplicated(self):
+        final = self.tmp / "dedupe-title.html"
+        render_final_html(
+            "同一个标题\n\n正文只出现一次。",
+            {"items": []},
+            str(self.tmp),
+            str(final),
+            title="同一个标题",
+        )
+        html = final.read_text(encoding="utf-8")
+        self.assertEqual(html.count("同一个标题"), 2)  # <title> + <h1>, no paragraph duplicate
+        self.assertNotIn("<p>同一个标题</p>", html)
+
+    def test_fallback_crop_badge_is_not_labeled_as_redraw(self):
+        image = self.tmp / "crop.png"
+        image.write_bytes(b"\x89PNG\r\n\x1a\n")
+        final = self.tmp / "fallback.html"
+        manifest = {
+            "items": [{
+                "kind": "figure",
+                "number": 1,
+                "file": "crop.png",
+                "caption": "Figure 1: source crop",
+            }]
+        }
+        render_final_html(
+            "正文引用 Figure 1。",
+            manifest,
+            str(self.tmp),
+            str(final),
+            reconstructed={
+                "figure_1": {
+                    "type": "image",
+                    "path": str(image),
+                    "badge": "原图 · 裁剪",
+                }
+            },
+            title="测试",
+        )
+        html = final.read_text(encoding="utf-8")
+        self.assertIn("原图 · 裁剪", html)
+        self.assertNotIn("流程图 · 结构重绘", html)
+
 
 if __name__ == "__main__":
     unittest.main()

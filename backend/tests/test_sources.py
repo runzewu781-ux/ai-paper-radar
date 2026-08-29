@@ -1,9 +1,42 @@
 import pytest
+import arxiv
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 
+from app.services.sources.arxiv_source import ArxivSource
 from app.services.sources.hf_source import HuggingFaceSource
 from app.services.sources.github_source import GitHubSource, parse_github_url
+
+
+class TestArxivSourceBackoff:
+    @patch("app.services.sources.arxiv_source.time.sleep")
+    def test_429_uses_exponential_backoff_then_recovers(self, mock_sleep):
+        source = ArxivSource()
+        source.client = MagicMock()
+        source.client.results.side_effect = [
+            arxiv.HTTPError("https://export.arxiv.org/api/query", 0, 429),
+            arxiv.HTTPError("https://export.arxiv.org/api/query", 0, 429),
+            iter([]),
+        ]
+
+        assert list(source._results_with_backoff(MagicMock())) == []
+        assert source.client.results.call_count == 3
+        assert mock_sleep.call_count == 2
+        delays = [call.args[0] for call in mock_sleep.call_args_list]
+        assert delays[0] >= 5
+        assert delays[1] >= 10
+
+    @patch("app.services.sources.arxiv_source.time.sleep")
+    def test_non_retryable_http_error_fails_immediately(self, mock_sleep):
+        source = ArxivSource()
+        source.client = MagicMock()
+        source.client.results.side_effect = arxiv.HTTPError(
+            "https://export.arxiv.org/api/query", 0, 401
+        )
+
+        with pytest.raises(arxiv.HTTPError):
+            list(source._results_with_backoff(MagicMock()))
+        mock_sleep.assert_not_called()
 
 
 class TestParseGithubUrl:

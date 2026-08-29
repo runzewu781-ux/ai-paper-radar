@@ -84,8 +84,11 @@ async def summarize_long_text(long_text: str, model: str, client: AsyncOpenAI, d
     try:
         stuff_prompt_template = """
         # INSTRUCTION
-        You are a senior editor. Your task is to read the following body text of a research paper and synthesize it into a single, coherent, and detailed summary.
-        This summary needs to cover all the essential aspects of the provided text.
+        You are a scientific evidence editor. Build a detailed source-grounded evidence digest of the paper body.
+        Preserve exact reported numbers, units, baselines, comparison directions, dataset names, method stages,
+        experimental settings, limitations, and uncertainty/causal qualifiers. Mention important Figure/Table numbers
+        when the text names them. Do not add interpretation or external facts. The digest will be used as the sole
+        factual source for a science article, so omission of a major result is more harmful than extra detail.
 
         # PAPER BODY TEXT:
         ---
@@ -99,7 +102,7 @@ async def summarize_long_text(long_text: str, model: str, client: AsyncOpenAI, d
         
         docs = [Document(page_content=body_text)]
         body_summary = await stuff_chain.arun(docs)
-        tqdm.write("[✓] 'Stuff' strategy for the body text was successful!")
+        tqdm.write("[OK] 'Stuff' strategy for the body text was successful!")
 
     except BadRequestError as e:
         if "context_length_exceeded" not in str(e).lower() and "maximum context length" not in str(e).lower() and "context length" not in str(e).lower():
@@ -117,9 +120,9 @@ async def summarize_long_text(long_text: str, model: str, client: AsyncOpenAI, d
 
         map_prompt_template = """
         # INSTRUCTION
-        You are a research analyst. Your task is to read the following text segment from a scientific paper and generate a concise summary.
-        Focus only on the most critical information: the research question, the proposed method, key results, and the main conclusion.
-        The language must be refined and to the point.
+        You are a research evidence extractor. Convert this segment into a compact evidence ledger.
+        Preserve exact numbers, units, named entities, datasets, methods, baselines, comparisons, limitations,
+        qualifiers, and Figure/Table references. Do not infer missing facts and do not use outside knowledge.
 
         # TEXT SEGMENT:
         ---
@@ -132,8 +135,9 @@ async def summarize_long_text(long_text: str, model: str, client: AsyncOpenAI, d
 
         combine_prompt_template = """
         # INSTRUCTION
-        You are a senior editor. You have received several summaries extracted from different parts of the same research paper.
-        Your task is to synthesize these summaries into a single, coherent final summary.
+        You are a scientific evidence editor. Merge the following chunk-level evidence ledgers into one detailed,
+        deduplicated evidence digest. Preserve exact numbers, units, comparison objects, qualifiers, limitations,
+        and Figure/Table references. Never invent a fact that is absent from the ledgers.
 
         # LIST OF SUMMARIES:
         ---
@@ -148,7 +152,7 @@ async def summarize_long_text(long_text: str, model: str, client: AsyncOpenAI, d
         
         try:
             body_summary = await map_reduce_chain.arun(docs)
-            tqdm.write("[✓] 'Map-Reduce' summarization for the body text is complete.")
+            tqdm.write("[OK] 'Map-Reduce' summarization for the body text is complete.")
         except Exception as chain_error:
             tqdm.write(f"[!] 'Map-Reduce' chain execution failed: {chain_error}")
             return f"Error: 'Map-Reduce' summarization failed - {chain_error}"

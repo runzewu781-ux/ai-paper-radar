@@ -78,7 +78,8 @@ def _visual_figure(number: int, kind: str, manifest_item: Optional[Dict],
         p = Path(recon["path"])
         if p.exists():
             img_path = p
-            badge = '<span class="badge">流程图 · 结构重绘</span>'
+            label = recon.get("badge", "流程图 · 结构重绘")
+            badge = '<span class="badge">%s</span>' % _esc(label)
     if img_path is None and manifest_item:
         p = base_dir / manifest_item["file"]
         if p.exists():
@@ -121,14 +122,28 @@ def render_final_html(
 
     seen = set()
     body = []
-    first = True
-    for blk in blocks:
+    start_index = 0
+    if title:
+        # A caller-supplied title is metadata, not a signal to discard the
+        # first content paragraph. The old implementation always consumed the
+        # first block as <h1>, which silently dropped real article content.
+        body.append("<h1>%s</h1>" % _esc(title))
+        if blocks:
+            first_text = " ".join(blocks[0]).strip()
+            if first_text == title.strip():
+                # Backward compatibility for callers that derive the title
+                # from the first block: render it once as the heading, not
+                # again as the opening paragraph.
+                start_index = 1
+    elif blocks:
+        body.append("<h1>%s</h1>" % _esc(" ".join(blocks[0])))
+        start_index = 1
+    else:
+        body.append("<h1>%s</h1>" % _esc("科普文章"))
+
+    for blk in blocks[start_index:]:
         text = " ".join(blk)
-        if first:
-            body.append("<h1>%s</h1>" % _esc(title or text))
-            first = False
-        else:
-            body.append("<p>%s</p>" % _esc(text))
+        body.append("<p>%s</p>" % _esc(text))
 
         for kind, num in _find_refs_pairs(text):
             key = (kind, num)
