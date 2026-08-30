@@ -1,16 +1,17 @@
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, Query, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import or_, func
 
 from app.db.session import get_db, SessionLocal
 from app.models.entities import Paper, Tag, PaperTag, SyncRun, MetricSnapshot, GithubRepository, SourceRecord
-from app.schemas.paper import PaperResponse, PaperListResponse, PaperUpdate, SyncRunResponse, TagResponse
+from app.schemas.paper import PaperResponse, PaperListResponse, PaperUpdate, SyncRunResponse, TagResponse, ArxivPaperRaw
 from app.services.ingestion.pipeline import SyncPipeline
 from app.services.classification.classifier import ManualOverride
 from app.services.ranking.attention import compute_attention
+from app.services.sources.arxiv_source import ArxivSource
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -225,11 +226,28 @@ def list_papers(
     )
 
 
+@router.get("/search/arxiv", response_model=list[ArxivPaperRaw])
+def search_arxiv_papers(
+    query: str = Query(..., min_length=1, max_length=200),
+    max_results: int = Query(default=20, ge=1, le=50),
+):
+    normalized_query = query.strip()
+    if not normalized_query:
+        raise HTTPException(status_code=422, detail="query must not be blank")
+
+    try:
+        return ArxivSource().search(normalized_query, max_results)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("arXiv search failed: %s", exc)
+        raise HTTPException(status_code=502, detail="arXiv search failed") from exc
+
+
 @router.get("/papers/{paper_id}", response_model=PaperResponse)
 def get_paper(paper_id: int, db: Session = Depends(get_db)):
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Paper not found")
     return paper
 
@@ -238,7 +256,6 @@ def get_paper(paper_id: int, db: Session = Depends(get_db)):
 def update_paper(paper_id: int, data: PaperUpdate, db: Session = Depends(get_db)):
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Paper not found")
 
     override = ManualOverride()
@@ -262,7 +279,6 @@ def update_paper(paper_id: int, data: PaperUpdate, db: Session = Depends(get_db)
 def get_paper_metrics(paper_id: int, db: Session = Depends(get_db)):
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Paper not found")
 
     score = compute_attention(db, paper)
@@ -299,7 +315,6 @@ def get_paper_metrics(paper_id: int, db: Session = Depends(get_db)):
 def refresh_paper(paper_id: int, db: Session = Depends(get_db)):
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Paper not found")
 
     pipeline = SyncPipeline(db)
@@ -348,7 +363,6 @@ def create_tag(
 def update_tag(tag_id: int, status: str | None = None, name_zh: str | None = None, db: Session = Depends(get_db)):
     tag = db.query(Tag).filter(Tag.id == tag_id).first()
     if not tag:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Tag not found")
     if status:
         tag.status = status
@@ -381,11 +395,9 @@ def editorial_queue(
 def set_editorial_status(paper_id: int, status: str, db: Session = Depends(get_db)):
     valid = {"new", "reviewing", "candidate", "rejected"}
     if status not in valid:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid}")
     paper = db.query(Paper).filter(Paper.id == paper_id).first()
     if not paper:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Paper not found")
     paper.editorial_status = status
     db.commit()

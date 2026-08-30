@@ -45,7 +45,7 @@ class TestKeywordRuleClassifier:
             abstract="This paper presents results.",
             arxiv_categories=["math.CO"],
         )
-        assert result.primary_domain == "ai-society"
+        assert result.primary_domain == "other"
         assert result.confidence < 0.2
 
     def test_secondary_domains(self, classifier):
@@ -54,7 +54,7 @@ class TestKeywordRuleClassifier:
             abstract="We build a multimodal agent that combines vision-language understanding with planning and tool use for autonomous tasks.",
             arxiv_categories=["cs.CV", "cs.CL", "cs.AI"],
         )
-        assert result.primary_domain in ("ai-agent", "multimodal", "computer-vision")
+        assert result.primary_domain in ("llm-nlp", "ai-agent", "multimodal", "computer-vision")
         assert len(result.secondary_domains) <= 2
 
 

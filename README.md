@@ -111,40 +111,55 @@ Render 免费层无内置 cron。用 cron-job.org 注册 → New cronjob → URL
 
 ## 目录结构
 
-```
-backend/
-  app/
-    api/routes.py          # FastAPI 路由
-    core/config.py         # Pydantic Settings
-    db/session.py          # SQLAlchemy 引擎（SQLite/Postgres 双轨）
-    models/entities.py     # 7 张表
-    schemas/paper.py       # Pydantic 模型
-    services/
-      sources/             # arXiv / HF / GitHub 适配器
-      ingestion/           # 去重 + 同步编排（增量分类/翻译）
-      classification/      # 规则分类 + 人工覆盖
-      ranking/             # 关注度计算
-      translation.py       # 标题/摘要中文翻译
-      scheduler.py         # 进程内定时（云端关闭）
-    cli.py                 # 命令行入口
-  tests/                   # 34 个单元/集成测试
-  alembic/                 # 数据库迁移（本地用）
-  Procfile                 # Render 启动命令
+仓库按职责分成三块：`backend/` 负责论文雷达 API 与数据管线，`frontend/` 负责 Web UI，`AutoPR/` 负责论文到科普/社交内容的生成工作流。核心源码目录保持稳定，生成物与本地语料不纳入 Git。
 
-frontend/
-  src/
-    api/client.ts          # API 层（VITE_API_URL 可配）
-    types/index.ts         # TypeScript 类型
-    components/            # Layout, PaperCard, Reveal
-    pages/                 # 6 个页面
-  vercel.json              # Vercel SPA rewrite
+```text
+ai-paper-radar/
+├─ backend/                    # AI Paper Radar 后端
+│  ├─ app/
+│  │  ├─ api/routes.py         # FastAPI 路由（列表、搜索、同步、编辑台）
+│  │  ├─ core/                 # 配置
+│  │  ├─ db/                   # SQLAlchemy 会话
+│  │  ├─ models/               # ORM 实体
+│  │  ├─ schemas/              # Pydantic 模型
+│  │  └─ services/
+│  │     ├─ sources/           # arXiv / HF / GitHub 数据源
+│  │     ├─ ingestion/         # 去重与同步编排
+│  │     ├─ classification/    # 规则分类与人工覆盖
+│  │     └─ ranking/           # 关注度计算
+│  ├─ tests/                   # 后端单元 / 集成测试
+│  └─ alembic/                 # 数据库迁移
+│
+├─ frontend/                   # React / Vite 前端
+│  └─ src/
+│     ├─ api/                  # API client
+│     ├─ components/           # 通用组件
+│     ├─ pages/                # 页面
+│     └─ types/                # TypeScript 类型
+│
+├─ AutoPR/                     # 本地改造版 AutoPR 生成工作流
+│  ├─ pragent/                 # 生成、事实审计、降 AI 味、图表/排版主逻辑
+│  ├─ tests/                   # AutoPR 回归测试
+│  ├─ docs/                    # AutoPR 文档
+│  ├─ assets/                  # 静态资源
+│  ├─ eval/                    # 评测工具
+│  ├─ script/                  # 辅助脚本
+│  ├─ live_test/               # 本地端到端生成产物（Git 忽略）
+│  └─ style_corpus/            # 本地写作语料（Git 忽略）
+│
+├─ .env.example
+├─ .gitignore
+└─ README.md
 ```
+
+本地运行生成的 `AutoPR/live_test/`、模型缓存、前端 `node_modules/`、pytest 缓存等不会进入版本库；需要交付的 PDF / HTML / ZIP 可以从这些本地产物中单独发布或打包。
 
 ## 功能状态
 
 | 功能 | 状态 |
 |------|------|
 | arXiv 抓取（cs.AI/CL/LG/CV） | ✅ |
+| arXiv 关键词搜索（按相关度） | ✅ |
 | 跨分类/跨版本去重 | ✅ |
 | HF Daily Papers 增强 + HF 推荐标记 | ✅（需网络可达） |
 | GitHub 仓库信号 | ✅（仅可靠 URL） |

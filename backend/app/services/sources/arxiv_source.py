@@ -131,3 +131,57 @@ class ArxivSource:
 
         logger.info("Fetched %d unique papers from arXiv", len(papers))
         return papers
+
+    def search(self, query: str, max_results: int = 20) -> list[ArxivPaperRaw]:
+        normalized_query = query.strip()
+        search = arxiv.Search(
+            query=normalized_query,
+            max_results=max_results,
+            sort_by=arxiv.SortCriterion.Relevance,
+            sort_order=arxiv.SortOrder.Descending,
+        )
+
+        papers: list[ArxivPaperRaw] = []
+        seen_ids: set[str] = set()
+
+        logger.info(
+            "Searching arXiv papers: query=%s, max_results=%d",
+            normalized_query,
+            max_results,
+        )
+
+        for result in self._results_with_backoff(search):
+            entry_id = result.entry_id.split("/abs/")[-1]
+            base_id, version = parse_arxiv_id(entry_id)
+
+            if base_id in seen_ids:
+                continue
+            seen_ids.add(base_id)
+
+            github_url = extract_github_url(result.comment)
+
+            paper = ArxivPaperRaw(
+                arxiv_id_base=base_id,
+                arxiv_version=version,
+                title=result.title.replace("\n", " ").strip(),
+                abstract=result.summary.replace("\n", " ").strip(),
+                authors=[a.name for a in result.authors],
+                arxiv_primary_category=result.primary_category,
+                arxiv_categories=result.categories,
+                published_at=result.published.replace(tzinfo=None),
+                updated_at=result.updated.replace(tzinfo=None),
+                pdf_url=result.pdf_url,
+                html_url=None,
+                arxiv_url=result.entry_id,
+                doi=result.doi,
+                journal_reference=result.journal_ref,
+                comments=result.comment,
+                project_url=github_url,
+            )
+            papers.append(paper)
+
+            if max_results and len(papers) >= max_results:
+                break
+
+        logger.info("Search returned %d unique papers from arXiv", len(papers))
+        return papers
