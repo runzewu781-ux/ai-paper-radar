@@ -1,4 +1,4 @@
-# pragent/backend/blog_pipeline.py
+# pragent/writing/blog_pipeline.py
 
 from tqdm.asyncio import tqdm
 import asyncio
@@ -12,9 +12,9 @@ import pytesseract
 from PIL import Image
 import asyncio
 
-from pragent.backend.agents import setup_client, BlogGeneratorAgent, FigureDescriberAgent, BlogIntegratorAgent, call_text_llm_api,call_text_llm_api_with_token_count
-from pragent.backend.data_loader import load_plain_text, load_paired_image_paths
-from pragent.backend.text_processor import summarize_long_text
+from pragent.core.agents import setup_client, BlogGeneratorAgent, FigureDescriberAgent, BlogIntegratorAgent, call_text_llm_api,call_text_llm_api_with_token_count
+from pragent.paper_processing.data_loader import load_plain_text, load_paired_image_paths
+from pragent.writing.text_processor import summarize_long_text
 from .prompts import (
     TEXT_GENERATOR_PROMPT, TEXT_GENERATOR_PROMPT_CHINESE,
     TWITTER_RICH_TEXT_PROMPT_ENGLISH, TWITTER_TEXT_ONLY_PROMPT_ENGLISH,

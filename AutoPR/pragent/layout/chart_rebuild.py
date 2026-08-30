@@ -23,7 +23,7 @@ def get_lieflat_dir() -> Path:
     configured = os.getenv("LIEFLAT_DIR", "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
-    workspace = Path(__file__).resolve().parents[5]
+    workspace = Path(__file__).resolve().parents[4]
     return workspace / "lieflat-charts"
 
 
@@ -174,7 +174,7 @@ async def rebuild_chart(
 
 def main():
     if len(sys.argv) < 3:
-        print("usage: python -m pragent.backend.figure_extractor.chart_rebuild <image> <out.html>")
+        print("usage: python -m pragent.layout.chart_rebuild <image> <out.html>")
         return
     key = os.getenv("BAILIAN_KEY", "")
     base = os.getenv(

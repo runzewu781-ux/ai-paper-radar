@@ -1,4 +1,4 @@
-# pragent/backend/text_processor.py
+# pragent/writing/text_processor.py
 import re
 from typing import List, Tuple
 from langchain_openai import ChatOpenAI

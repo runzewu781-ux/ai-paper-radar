@@ -10,13 +10,13 @@ import json
 import traceback
 from typing import List, Dict, Tuple, Optional
 
-from pragent.backend.text_pipeline import pipeline as run_text_extraction
-from pragent.backend.figure_vision_pipeline import run_figure_extraction_vision
-from pragent.backend.blog_pipeline import generate_text_blog, generate_final_post, generate_wechat_post
-from pragent.backend.agents import setup_client, call_text_llm_api
-from pragent.backend.post_clean import clean_khazix, l1_audit, md_to_html
-from pragent.backend.prompts_humanizer import HUMANIZER_QC_SYSTEM_ZH, build_humanizer_report
-from pragent.backend.prompts_wechat import WECHAT_DRAFT_PROMPT_CHINESE
+from pragent.paper_processing.text_pipeline import pipeline as run_text_extraction
+from pragent.paper_processing.figure_vision_pipeline import run_figure_extraction_vision
+from pragent.writing.blog_pipeline import generate_text_blog, generate_final_post, generate_wechat_post
+from pragent.core.agents import setup_client, call_text_llm_api
+from pragent.ai_denoise.post_clean import clean_khazix, l1_audit, md_to_html
+from pragent.ai_denoise.prompts_humanizer import HUMANIZER_QC_SYSTEM_ZH, build_humanizer_report
+from pragent.writing.prompts_wechat import WECHAT_DRAFT_PROMPT_CHINESE
 
 import base64
 import mimetypes

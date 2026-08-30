@@ -1,6 +1,6 @@
 import unittest
 
-from pragent.backend.less_ai_tone import (
+from pragent.ai_denoise.less_ai_tone import (
     publication_fingerprint,
     resolve_skill_path,
     validate_rewrite,

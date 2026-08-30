@@ -8,8 +8,8 @@ from typing import List, Dict, Optional
 from PIL import Image
 from tqdm.asyncio import tqdm
 
-from pragent.backend.agents import setup_client
-from pragent.backend.loader import ImagePDFLoader
+from pragent.core.agents import setup_client
+from .loader import ImagePDFLoader
 
 PAGE_PROMPT = """你正在分析一篇学术论文的某一页截图。
 任务:判断本页是否包含图表(figure / table / 示意图 / 实验结果图 / 流程图 / 架构图)。

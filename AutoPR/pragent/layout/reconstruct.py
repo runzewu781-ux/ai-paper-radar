@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from .classify import classify_image, _img_to_data_uri
+from pragent.paper_processing.figures.classify import classify_image, _img_to_data_uri
 
 try:
     from openai import AsyncOpenAI

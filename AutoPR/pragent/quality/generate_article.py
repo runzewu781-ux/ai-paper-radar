@@ -16,26 +16,17 @@ import re
 from pathlib import Path
 from typing import Dict, Optional
 
-from . import run_extraction
-from . import reconstruct as R
-from .chart_rebuild import rebuild_chart
-from .render_final import render_final_html
-from .structure_rebuild import render_structure_svg
-
-try:
-    from ..agents import setup_client, call_text_llm_api
-    from ..ai_tone_detector import analyze_text, critical_hit_count
-    from ..blog_pipeline import generate_text_blog
-    from ..less_ai_tone import rewrite_flagged_paragraphs
-    from ..prompts_wechat import WECHAT_DRAFT_PROMPT_CHINESE
-    from ..text_pipeline import pipeline as run_text_extraction
-except ImportError:  # 相对导入兜底
-    from pragent.backend.agents import setup_client, call_text_llm_api
-    from pragent.backend.ai_tone_detector import analyze_text, critical_hit_count
-    from pragent.backend.blog_pipeline import generate_text_blog
-    from pragent.backend.less_ai_tone import rewrite_flagged_paragraphs
-    from pragent.backend.prompts_wechat import WECHAT_DRAFT_PROMPT_CHINESE
-    from pragent.backend.text_pipeline import pipeline as run_text_extraction
+from pragent.paper_processing.figures import run_extraction
+from pragent.layout import reconstruct as R
+from pragent.layout.chart_rebuild import rebuild_chart
+from pragent.layout.render_final import render_final_html
+from pragent.layout.structure_rebuild import render_structure_svg
+from pragent.core.agents import setup_client, call_text_llm_api
+from pragent.ai_denoise.ai_tone_detector import analyze_text, critical_hit_count
+from pragent.writing.blog_pipeline import generate_text_blog
+from pragent.ai_denoise.less_ai_tone import rewrite_flagged_paragraphs
+from pragent.writing.prompts_wechat import WECHAT_DRAFT_PROMPT_CHINESE
+from pragent.paper_processing.text_pipeline import pipeline as run_text_extraction
 
 
 async def _weave_citations(draft: str, manifest: dict, api_key: str, api_base: str, model: str) -> str:
@@ -159,7 +150,7 @@ def _evidence_text(source_text: str, manifest: dict) -> str:
 
 
 def _default_human_corpus_dir() -> Path | None:
-    root = Path(__file__).resolve().parents[3]
+    root = Path(__file__).resolve().parents[2]
     corpus = root / "style_corpus" / "kepuchina"
     return corpus if corpus.exists() else None
 

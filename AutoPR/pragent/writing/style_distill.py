@@ -1,4 +1,4 @@
-﻿"""公众号文风蒸馏。
+"""公众号文风蒸馏。
 
 支持一个或多个本地语料目录（每篇文章一个 .txt/.md 文件），先分块蒸馏，
 再把各块风格画像汇总成统一画像，避免大语料一次性塞入上下文。
@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 try:
-    from ..agents import setup_client, call_text_llm_api
+    from pragent.core.agents import setup_client, call_text_llm_api
 except ImportError:
-    from pragent.backend.agents import setup_client, call_text_llm_api
+    from pragent.core.agents import setup_client, call_text_llm_api
 
 
 _DISTILL_SYSTEM = (

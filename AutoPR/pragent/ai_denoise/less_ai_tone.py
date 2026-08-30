@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .agents import setup_client, call_text_llm_api
+from pragent.core.agents import setup_client, call_text_llm_api
 from .ai_tone_detector import CRITICAL_RULE_IDS, split_blocks
 
 _NUMBER_RE = re.compile(r'(?<![A-Za-z0-9])(?:\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)(?:[%％])?')
@@ -63,7 +63,7 @@ def resolve_skill_path(explicit: str | None = None) -> Path | None:
             candidates.append(Path(value))
 
     here = Path(__file__).resolve()
-    # .../科普工作流/ai-paper-radar/AutoPR/pragent/backend/less_ai_tone.py
+    # .../科普工作流/ai-paper-radar/AutoPR/pragent/ai_denoise/less_ai_tone.py
     try:
         workspace = here.parents[4]
         candidates.append(workspace / "lieflat-less-ai-tone" / "SKILL.md")

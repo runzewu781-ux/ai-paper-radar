@@ -1,4 +1,4 @@
-# pragent/backend/text_pipeline.py
+# pragent/paper_processing/text_pipeline.py
 
 import asyncio
 import sys
@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 import aiofiles.os 
 from tqdm.asyncio import tqdm
-from pragent.backend.pdf2html import convert_pdf_to_text_only_html
-from pragent.backend.html2txt import convert_html_to_txt
+from .pdf2html import convert_pdf_to_text_only_html
+from .html2txt import convert_html_to_txt
 
 async def pipeline(pdf_path: str, output_txt_path: str, ablation_mode: str = "none"):
     """

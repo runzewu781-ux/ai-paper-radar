@@ -22,14 +22,14 @@
 1. **接入阿里云百炼 Token Plan**：运行时统一用 `qwen3.8-max-preview`（文本 + 视觉，OpenAI 兼容协议）。
    配置走 `.env`（`OPENAI_API_BASE` + 百炼 Token Plan 专属 `OPENAI_API_KEY`，密钥格式见阿里云文档）；**`.env` 含密钥，不入库**，
    需自行按 `.env.example` 与本文档配置。
-2. **新增 YOLO-free 视觉链路** `pragent/backend/figure_vision_pipeline.py`：用视觉模型对每页整图直读图表
+2. **新增 YOLO-free 视觉链路** `pragent/paper_processing/figure_vision_pipeline.py`：用视觉模型对每页整图直读图表
    （并发、本地零推理），替代原 DocLayout-YOLO 的 CPU 版面检测（无 NVIDIA 卡时该步是分钟级瓶颈）。
    整页渲染图作为配图占位，描述写入 `precomputed_items[*].description`，供下游美化 skill 替换。
-3. **移除 YOLO 依赖**：删除 `pragent/backend/yolo.py` 与 `pragent/backend/figure_table_pipeline.py`；
+3. **移除 YOLO 依赖**：删除 `pragent/paper_processing/yolo.py` 与 `pragent/paper_processing/figure_table_pipeline.py`；
    `requirements.txt` 注释掉 `doclayout_yolo`；`pragent/run.py` 去掉 `--model-path` 参数；上游 `README.md`
    的"下载 YOLO 权重"准备段已相应改写。
 4. **三入口切换到新视觉链路**：`app.py`（Gradio）、`pragent/run.py`（batch + baseline 两路径）；
-   `pragent/backend/blog_pipeline.py` 的 `generate_final_post` / `generate_baseline_post` 新增
+   `pragent/writing/blog_pipeline.py` 的 `generate_final_post` / `generate_baseline_post` 新增
    `precomputed_items` 注入参数（旧 CLI/评测路径默认 `None`，行为不变）。
 5. **Gradio 界面预填**：`app.py` 启动时 `load_dotenv` 并把百炼 Base URL / Key / 模型名预填进 Advanced Settings。
 6. **视觉支路 `max_pages` 限页参数**：长论文可只读前 N 页以控时控费；不传则读全部页（忠实原行为）。

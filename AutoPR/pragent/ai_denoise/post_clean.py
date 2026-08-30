@@ -1,4 +1,4 @@
-# pragent/backend/post_clean.py
+# pragent/ai_denoise/post_clean.py
 # 公众号长文（卡兹克文风）的 L1 确定性清理 + 质检 + HTML 渲染。
 # 全部为纯函数，不做任何文件 IO（落盘由 app.py / run.py 负责）。
 

@@ -1,6 +1,6 @@
 import unittest
 
-from pragent.backend.prompts_wechat import (
+from pragent.writing.prompts_wechat import (
     WECHAT_DRAFT_PROMPT_CHINESE,
     WECHAT_RICH_PROMPT_CHINESE,
     WECHAT_TEXT_ONLY_PROMPT_CHINESE,

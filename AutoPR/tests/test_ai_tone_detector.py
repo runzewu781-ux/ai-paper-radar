@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pragent.backend.ai_tone_detector import (
+from pragent.ai_denoise.ai_tone_detector import (
     analyze_text,
     critical_hit_count,
     flagged_paragraph_indexes,

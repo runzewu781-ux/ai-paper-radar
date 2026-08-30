@@ -1,5 +1,5 @@
 .env
-backend/.env
+PaperRadar/backend/.env
 __pycache__/
 *.py[cod]
 *.db
@@ -9,7 +9,7 @@ dist/
 build/
 data/raw/
 data/exports/
-backend/data/
+PaperRadar/backend/data/
 .venv/
 venv/
 *.egg-info/
@@ -25,7 +25,7 @@ autopr_test_output/
 # generated artifacts (AutoPR / figure workflow)
 AutoPR/output/
 AutoPR/input/
-AutoPR/live_test/
+AutoPR/samples/generated/
 
 # local writing-style corpora (copyrighted source material; keep local)
 AutoPR/style_corpus/

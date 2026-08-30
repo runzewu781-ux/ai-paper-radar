@@ -2,9 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pragent.backend.figure_extractor.chart_rebuild import render_lieflat_payload
-from pragent.backend.figure_extractor.render_final import render_final_html
-from pragent.backend.figure_extractor.structure_rebuild import render_structure_svg
+from pragent.layout.chart_rebuild import render_lieflat_payload
+from pragent.layout.render_final import render_final_html
+from pragent.layout.structure_rebuild import render_structure_svg
 
 
 class ChartRouterBridgeTests(unittest.TestCase):

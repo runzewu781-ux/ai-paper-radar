@@ -32,7 +32,7 @@ cp .env.example .env
 ### 2. 后端
 
 ```bash
-cd backend
+cd PaperRadar/backend
 pip install -r requirements.txt
 python -m alembic upgrade head      # 本地建表（云端启动时会自动 create_all，无需此步）
 uvicorn app.main:app --reload --port 8000
@@ -41,7 +41,7 @@ uvicorn app.main:app --reload --port 8000
 ### 3. 前端
 
 ```bash
-cd frontend
+cd PaperRadar/frontend
 npm install
 npm run dev
 ```
@@ -60,14 +60,14 @@ POST http://localhost:8000/api/translate/backfill?limit=20         # 分批补�
 
 CLI 方式：
 ```bash
-cd backend
+cd PaperRadar/backend
 python -m app.cli sync --days 1 --max 25
 ```
 
 ### 5. 运行测试
 
 ```bash
-cd backend
+cd PaperRadar/backend
 python -m pytest tests/ -v
 ```
 
@@ -85,7 +85,7 @@ python -m pytest tests/ -v
 ### 后端 — Render
 
 1. render.com 用 GitHub 登录 → New Web Service → 选本仓库。
-2. **Root Directory** 填 `backend`。
+2. **Root Directory** 填 `PaperRadar/backend`。
 3. **Build Command** 填 `pip install -r requirements.txt`。
 4. **Start Command** 留空（读 `Procfile`），或填 `uvicorn app.main:app --host 0.0.0.0 --port $PORT`。
 5. Instance type 选 **Free**。
@@ -101,7 +101,7 @@ python -m pytest tests/ -v
 ### 前端 — Vercel
 
 1. vercel.com 用 GitHub 登录 → New Project → 选本仓库。
-2. **Root Directory** 填 `frontend`，Framework Preset 选 **Vite**。
+2. **Root Directory** 填 `PaperRadar/frontend`，Framework Preset 选 **Vite**。
 3. Environment Variables 填 `VITE_API_URL` = 后端地址（**不带** `/api`，如 `https://ai-paper-radar.onrender.com`）。
 4. Deploy（`vercel.json` 已含 SPA rewrite）。
 
@@ -111,48 +111,41 @@ Render 免费层无内置 cron。用 cron-job.org 注册 → New cronjob → URL
 
 ## 目录结构
 
-仓库按职责分成三块：`backend/` 负责论文雷达 API 与数据管线，`frontend/` 负责 Web UI，`AutoPR/` 负责论文到科普/社交内容的生成工作流。核心源码目录保持稳定，生成物与本地语料不纳入 Git。
+仓库现在按能力分成三大块：**PaperRadar（文章雷达）**、**AutoPR（论文科普生产）**、**Lieflat-Charts-Skill（图表 Skill 接入口）**。AutoPR 内部再按生产职责拆分，避免写作、排版、降噪、解析逻辑继续混在同一目录。
 
 ```text
 ai-paper-radar/
-├─ backend/                    # AI Paper Radar 后端
-│  ├─ app/
-│  │  ├─ api/routes.py         # FastAPI 路由（列表、搜索、同步、编辑台）
-│  │  ├─ core/                 # 配置
-│  │  ├─ db/                   # SQLAlchemy 会话
-│  │  ├─ models/               # ORM 实体
-│  │  ├─ schemas/              # Pydantic 模型
-│  │  └─ services/
-│  │     ├─ sources/           # arXiv / HF / GitHub 数据源
-│  │     ├─ ingestion/         # 去重与同步编排
-│  │     ├─ classification/    # 规则分类与人工覆盖
-│  │     └─ ranking/           # 关注度计算
-│  ├─ tests/                   # 后端单元 / 集成测试
-│  └─ alembic/                 # 数据库迁移
+├─ PaperRadar/                         # 文章雷达
+│  ├─ backend/                         # FastAPI / 数据源 / 分类 / 排名 / 数据库
+│  └─ frontend/                        # React / Vite Web UI
 │
-├─ frontend/                   # React / Vite 前端
-│  └─ src/
-│     ├─ api/                  # API client
-│     ├─ components/           # 通用组件
-│     ├─ pages/                # 页面
-│     └─ types/                # TypeScript 类型
+├─ AutoPR/                             # 论文 -> 科普文章生产
+│  ├─ samples/                         # 样品产出区
+│  │  └─ generated/                    # 本地 PDF / HTML / ZIP / 实验结果（Git 忽略）
+│  ├─ pragent/
+│  │  ├─ writing/                      # 写作区：公众号 prompt、长文生成、风格蒸馏
+│  │  ├─ layout/                       # 排版区：最终 HTML、图表视觉编排、结构图渲染
+│  │  ├─ ai_denoise/                   # AI 降噪区：AI-tone 检测、选择性改写、文本清理
+│  │  ├─ paper_processing/             # 论文解析区：PDF/HTML/Text、Figure/Table 提取
+│  │  ├─ quality/                      # 质量审计区：事实门、数字核验、生成总验收
+│  │  ├─ core/                         # 公共基础：模型 client / Agent 基础能力
+│  │  └─ run.py                        # CLI 入口
+│  ├─ eval/                            # PRBench / 评测体系
+│  ├─ docs/                            # AutoPR 文档
+│  ├─ assets/                          # 静态资源
+│  └─ script/                          # 辅助脚本
 │
-├─ AutoPR/                     # 本地改造版 AutoPR 生成工作流
-│  ├─ pragent/                 # 生成、事实审计、降 AI 味、图表/排版主逻辑
-│  ├─ tests/                   # AutoPR 回归测试
-│  ├─ docs/                    # AutoPR 文档
-│  ├─ assets/                  # 静态资源
-│  ├─ eval/                    # 评测工具
-│  ├─ script/                  # 辅助脚本
-│  ├─ live_test/               # 本地端到端生成产物（Git 忽略）
-│  └─ style_corpus/            # 本地写作语料（Git 忽略）
+├─ Lieflat-Charts-Skill/               # Lieflat 独立 Skill 接入口（不复制源码）
+│  └─ README.md                        # 指向独立仓库与 AgentDock Skill URI
 │
 ├─ .env.example
 ├─ .gitignore
 └─ README.md
 ```
 
-本地运行生成的 `AutoPR/live_test/`、模型缓存、前端 `node_modules/`、pytest 缓存等不会进入版本库；需要交付的 PDF / HTML / ZIP 可以从这些本地产物中单独发布或打包。
+这里额外补出的 **论文解析区** 和 **质量审计区** 是必要的：前者负责把 PDF 变成可写作证据，后者负责事实与生成质量，不应混入“排版”或“AI 降噪”。`core` 只放跨区共享基础设施，不作为业务产出区。
+
+本地生成物统一进入 `AutoPR/samples/generated/`；写作语料 `AutoPR/style_corpus/` 仍保持本地且 Git 忽略。Lieflat 保持独立仓库/独立 Skill，AutoPR 只消费其已验证输出，避免出现两份源码漂移。
 
 ## 功能状态
 
