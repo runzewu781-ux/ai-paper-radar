@@ -13,6 +13,9 @@ from .crop import render_and_trim
 from .quality import run_quality_checks
 from .report import write_manifest, generate_contact_sheet
 from .classify import classify_image
+from .matching import RegionProposal, resolve_page_assignments
+from .text_types import classify_page_lines
+from .typography import estimate_document_typography
 
 
 async def run_extraction(
@@ -37,14 +40,56 @@ async def run_extraction(
     doc = fitz.open(str(pdf_path))
     total_pages = len(doc)
 
-    captions = find_captions(doc)
+    typography = estimate_document_typography(doc)
+    print(
+        "[figure_extractor] Typography: "
+        f"font={typography.body_font} size={typography.body_size:.1f} "
+        f"gap={typography.body_line_gap:.1f} confidence={typography.confidence:.2f}"
+    )
+
+    captions = find_captions(doc, typography)
     print(f"[figure_extractor] Found {len(captions)} captions "
           f"({sum(1 for c in captions if c.kind == 'figure')} figures, "
           f"{sum(1 for c in captions if c.kind == 'table')} tables)")
 
     layouts: Dict[int, PageLayout] = {}
+    typed_lines: Dict[int, list] = {}
     for page_num in range(total_pages):
-        layouts[page_num] = detect_layout(doc[page_num])
+        page_captions = [c for c in captions if c.page_num == page_num]
+        typed_lines[page_num] = classify_page_lines(
+            doc[page_num], typography, page_captions, page_num=page_num,
+        )
+        layouts[page_num] = detect_layout(
+            doc[page_num], typography, typed_lines[page_num],
+        )
+
+    raw_proposals: Dict[tuple, RegionProposal] = {}
+    proposals_by_page: Dict[int, List[RegionProposal]] = {}
+    for cap in captions:
+        page = doc[cap.page_num]
+        layout = layouts[cap.page_num]
+        page_captions = [c for c in captions if c.page_num == cap.page_num]
+        page_lines = typed_lines[cap.page_num]
+        if cap.kind == "figure":
+            bbox, confidence = locate_figure_content(
+                page, cap, layout, page_captions, page_lines,
+            )
+        else:
+            bbox, confidence = locate_table_content(
+                page, cap, layout, page_captions, page_lines,
+            )
+        if bbox is None:
+            continue
+        proposal = RegionProposal(cap, bbox, confidence)
+        raw_proposals[proposal.key] = proposal
+        proposals_by_page.setdefault(cap.page_num, []).append(proposal)
+
+    assigned_proposals: Dict[tuple, RegionProposal] = {}
+    for page_num, proposals in proposals_by_page.items():
+        page_captions = [c for c in captions if c.page_num == page_num]
+        assigned_proposals.update(
+            resolve_page_assignments(page_captions, proposals, layouts[page_num])
+        )
 
     items: List[Dict[str, Any]] = []
     images_for_sheet: List[Dict[str, Any]] = []
@@ -54,16 +99,20 @@ async def run_extraction(
         layout = layouts[cap.page_num]
         page_captions = [c for c in captions if c.page_num == cap.page_num]
 
-        if cap.kind == "figure":
-            bbox, confidence = locate_figure_content(page, cap, layout, page_captions)
-        else:
-            bbox, confidence = locate_table_content(page, cap, layout, page_captions)
-
-        if bbox is None:
-            print(f"[figure_extractor] SKIP {cap.label} (p{cap.page_num+1}): no content found")
+        key = (cap.kind, cap.number, cap.page_num)
+        proposal = assigned_proposals.get(key)
+        if proposal is None:
+            reason = "assignment conflict" if key in raw_proposals else "no content found"
+            print(f"[figure_extractor] SKIP {cap.label} (p{cap.page_num+1}): {reason}")
             continue
+        bbox, confidence = proposal.bbox, proposal.confidence
 
-        img = render_and_trim(page, bbox, dpi=dpi)
+        img = render_and_trim(
+            page,
+            bbox,
+            dpi=dpi,
+            padding=0.0 if cap.kind == "table" else 5.0,
+        )
 
         page_rect = page.mediabox
         scale = dpi / 72.0
@@ -71,6 +120,10 @@ async def run_extraction(
             img, bbox, page_rect, confidence,
             page_width_px=page_rect.width * scale,
             page_height_px=page_rect.height * scale,
+            page=page,
+            layout=layout,
+            caption=cap,
+            typed_lines=typed_lines[cap.page_num],
         )
 
         visual_type = cap.kind
@@ -101,9 +154,18 @@ async def run_extraction(
                      round(bbox.x1, 1), round(bbox.y1, 1)],
             "confidence": confidence,
             "needs_review": qr.needs_review,
+            "has_body_text_contamination": qr.has_body_text_contamination,
+            "body_text_chars": qr.body_text_chars,
             "visual_type": visual_type,
             "layout": layout.kind,
             "issues": qr.issues,
+            "qa_metrics": qr.metrics.to_dict() if qr.metrics is not None else {},
+            "typography": {
+                "body_font": typography.body_font,
+                "body_size": typography.body_size,
+                "body_line_gap": typography.body_line_gap,
+                "profile_confidence": typography.confidence,
+            },
         }
         items.append(item)
 

@@ -62,8 +62,9 @@ def render_and_trim(
     page: fitz.Page,
     bbox: fitz.Rect,
     dpi: int = 200,
+    padding: float = 5.0,
 ) -> Optional[Image.Image]:
-    img = render_crop(page, bbox, dpi=dpi)
+    img = render_crop(page, bbox, dpi=dpi, padding=padding)
     if img is None:
         return None
     return trim_whitespace(img)
