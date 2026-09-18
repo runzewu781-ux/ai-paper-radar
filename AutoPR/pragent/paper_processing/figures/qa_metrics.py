@@ -6,6 +6,7 @@ from typing import Optional, Sequence
 import fitz
 
 from .captions import Caption
+from .page_evidence import PageEvidence
 from .text_types import TextType, TypedLine
 
 
@@ -56,16 +57,25 @@ def _vertical_distance(a: fitz.Rect, b: fitz.Rect) -> float:
     return 0.0
 
 
-def _visual_support_rects(page: fitz.Page, bbox: fitz.Rect) -> list[fitz.Rect]:
+def _visual_support_rects(
+    page: fitz.Page,
+    bbox: fitz.Rect,
+    evidence: Optional[PageEvidence] = None,
+) -> list[fitz.Rect]:
     result: list[fitz.Rect] = []
     page_area = max(_area(page.mediabox), 1.0)
-    for block in page.get_text("dict").get("blocks", []):
+    text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
+    for block in text_dict.get("blocks", []):
         if block.get("type") == 1:
             rect = fitz.Rect(block["bbox"])
             if rect.intersects(bbox):
                 result.append(rect)
-    for drawing in page.get_drawings():
-        rect = fitz.Rect(drawing["rect"])
+    drawing_rects = (
+        evidence.get_drawing_rects(page)
+        if evidence is not None
+        else [fitz.Rect(drawing["rect"]) for drawing in page.get_drawings()]
+    )
+    for rect in drawing_rects:
         area = _area(rect)
         if (
             rect.intersects(bbox)
@@ -83,6 +93,7 @@ def compute_crop_metrics(
     typed_lines: Sequence[TypedLine],
     caption: Optional[Caption] = None,
     column_boundary: Optional[float] = None,
+    evidence: Optional[PageEvidence] = None,
 ) -> CropMetrics:
     crop_area = max(_area(bbox), 1.0)
     page_area = max(_area(page.mediabox), 1.0)
@@ -120,7 +131,7 @@ def compute_crop_metrics(
 
     full_width_body = sum(1 for line in body_lines if line.bbox.width >= bbox.width * 0.62)
 
-    support_rects = _visual_support_rects(page, bbox)
+    support_rects = _visual_support_rects(page, bbox, evidence)
     support_area = sum(_area(rect & bbox) for rect in support_rects)
     visual_support_ratio = min(1.0, support_area / crop_area)
 

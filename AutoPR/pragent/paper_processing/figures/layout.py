@@ -3,6 +3,7 @@ from statistics import median
 from typing import List, Optional, Sequence, Tuple
 import fitz
 
+from .page_evidence import PageEvidence
 from .text_types import TypedLine
 from .typography import TypographyProfile
 
@@ -21,9 +22,13 @@ class PageLayout:
     right_col_right: Optional[float] = None
 
 
-def _line_rects(page: fitz.Page) -> List[Tuple[fitz.Rect, str]]:
+def _line_rects(
+    page: fitz.Page,
+    evidence: Optional[PageEvidence] = None,
+) -> List[Tuple[fitz.Rect, str]]:
     lines: List[Tuple[fitz.Rect, str]] = []
-    for block in page.get_text("dict")["blocks"]:
+    text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
+    for block in text_dict["blocks"]:
         if block.get("type") != 0:
             continue
         for line in block.get("lines", []):
@@ -51,6 +56,7 @@ def detect_layout(
     page: fitz.Page,
     profile: Optional[TypographyProfile] = None,
     typed_lines: Optional[Sequence[TypedLine]] = None,
+    evidence: Optional[PageEvidence] = None,
 ) -> PageLayout:
     rect = page.mediabox
     w, h = rect.width, rect.height
@@ -59,7 +65,7 @@ def detect_layout(
         return PageLayout(kind="landscape", page_width=w, page_height=h,
                           text_left=0, text_right=w)
 
-    lines = _line_rects(page)
+    lines = _line_rects(page, evidence)
     if not lines:
         return PageLayout(kind="single", page_width=w, page_height=h,
                           text_left=0, text_right=w)
@@ -127,7 +133,7 @@ def detect_layout(
     # dual layout, keep the older geometric detector as a fallback rather than
     # allowing a partial classifier to downgrade a genuinely two-column page.
     if typed_body:
-        legacy = detect_layout(page)
+        legacy = detect_layout(page, evidence=evidence)
         if legacy.kind == "dual":
             return legacy
 

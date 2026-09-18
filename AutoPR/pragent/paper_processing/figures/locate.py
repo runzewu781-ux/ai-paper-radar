@@ -4,33 +4,55 @@ import fitz
 
 from .captions import Caption
 from .layout import PageLayout
+from .page_evidence import PageEvidence
 from .text_types import TypedLine
 
 
 TextBlock = Tuple[fitz.Rect, str, float, int]
 
 
-def _get_image_blocks(page: fitz.Page) -> List[fitz.Rect]:
+def _get_image_blocks(
+    page: fitz.Page,
+    evidence: Optional[PageEvidence] = None,
+) -> List[fitz.Rect]:
+    text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
     return [
         fitz.Rect(b["bbox"])
-        for b in page.get_text("dict")["blocks"]
+        for b in text_dict["blocks"]
         if b.get("type") == 1
     ]
 
 
-def _get_drawing_rects(page: fitz.Page, min_width: float = 8.0) -> List[fitz.Rect]:
+def _get_drawing_rects(
+    page: fitz.Page,
+    min_width: float = 8.0,
+    evidence: Optional[PageEvidence] = None,
+) -> List[fitz.Rect]:
     rects: List[fitz.Rect] = []
-    for drawing in page.get_drawings():
-        r = fitz.Rect(drawing["rect"])
+    drawing_rects = (
+        evidence.get_drawing_rects(page)
+        if evidence is not None
+        else [fitz.Rect(drawing["rect"]) for drawing in page.get_drawings()]
+    )
+    for r in drawing_rects:
         if r.width >= min_width and (r.height >= 1.0 or r.width >= 20.0):
             rects.append(r)
     return rects
 
 
-def _get_hline_rects(page: fitz.Page, min_width: float = 30.0, max_height: float = 4.0) -> List[fitz.Rect]:
+def _get_hline_rects(
+    page: fitz.Page,
+    min_width: float = 30.0,
+    max_height: float = 4.0,
+    evidence: Optional[PageEvidence] = None,
+) -> List[fitz.Rect]:
     rects: List[fitz.Rect] = []
-    for drawing in page.get_drawings():
-        r = fitz.Rect(drawing["rect"])
+    drawing_rects = (
+        evidence.get_drawing_rects(page)
+        if evidence is not None
+        else [fitz.Rect(drawing["rect"]) for drawing in page.get_drawings()]
+    )
+    for r in drawing_rects:
         if r.width > min_width and r.height < max_height:
             rects.append(r)
     return rects
@@ -46,9 +68,13 @@ def _is_header_line(rect: fitz.Rect, page: fitz.Page, img_blocks: List[fitz.Rect
     return rect.y0 < page_h * 0.09
 
 
-def _get_text_blocks(page: fitz.Page) -> List[TextBlock]:
+def _get_text_blocks(
+    page: fitz.Page,
+    evidence: Optional[PageEvidence] = None,
+) -> List[TextBlock]:
     results: List[TextBlock] = []
-    for block in page.get_text("dict")["blocks"]:
+    text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
+    for block in text_dict["blocks"]:
         if block.get("type") != 0:
             continue
         parts = []
@@ -237,14 +263,15 @@ def locate_figure_content(
     layout: PageLayout,
     all_captions: List[Caption],
     typed_lines: Optional[Sequence[TypedLine]] = None,
+    evidence: Optional[PageEvidence] = None,
 ) -> Tuple[Optional[fitz.Rect], float]:
     """Find the best visual cluster immediately preceding a Figure caption."""
     page_rect = page.mediabox
     cap_y0 = caption.bbox.y0
     search_x0, search_x1 = _column_bounds(page, caption, layout)
     search_region = fitz.Rect(search_x0, page_rect.y0, search_x1, cap_y0)
-    text_blocks = _get_text_blocks(page)
-    img_blocks = _get_image_blocks(page)
+    text_blocks = _get_text_blocks(page, evidence)
+    img_blocks = _get_image_blocks(page, evidence)
 
     previous_caption_y = page_rect.y0 + 18
     for other in all_captions:
@@ -255,7 +282,7 @@ def locate_figure_content(
 
     signals: List[fitz.Rect] = []
     page_area = max(page_rect.width * page_rect.height, 1.0)
-    for r in img_blocks + _get_drawing_rects(page):
+    for r in img_blocks + _get_drawing_rects(page, evidence=evidence):
         if not r.intersects(search_region):
             continue
         if r.y1 <= previous_caption_y - 3 or r.y0 >= cap_y0 or r.y1 > cap_y0 - 2:
@@ -325,7 +352,7 @@ def locate_figure_content(
 
     upper_bound = previous_caption_y
     header_lines = [
-        r for r in _get_hline_rects(page)
+        r for r in _get_hline_rects(page, evidence=evidence)
         if _is_header_line(r, page, img_blocks)
         and min(r.x1, search_x1) - max(r.x0, search_x0) > (search_x1 - search_x0) * 0.45
     ]
@@ -443,19 +470,20 @@ def locate_table_content(
     layout: PageLayout,
     all_captions: List[Caption],
     typed_lines: Optional[Sequence[TypedLine]] = None,
+    evidence: Optional[PageEvidence] = None,
 ) -> Tuple[Optional[fitz.Rect], float]:
     """Find the nearest coherent table-rule cluster around a Table caption."""
     page_rect = page.mediabox
     search_x0, search_x1 = _column_bounds(page, caption, layout)
-    img_blocks = _get_image_blocks(page)
-    text_blocks = _get_text_blocks(page)
+    img_blocks = _get_image_blocks(page, evidence)
+    text_blocks = _get_text_blocks(page, evidence)
 
     def in_column(r: fitz.Rect) -> bool:
         overlap = min(r.x1, search_x1) - max(r.x0, search_x0)
         return overlap > 0 and overlap / max(r.width, 1.0) >= 0.35
 
     hlines = [
-        r for r in _get_hline_rects(page)
+        r for r in _get_hline_rects(page, evidence=evidence)
         if in_column(r) and not _is_header_line(r, page, img_blocks)
     ]
 

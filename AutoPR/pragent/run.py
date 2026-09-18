@@ -125,6 +125,8 @@ async def process_single_project(project_path: Path, args: argparse.Namespace, p
                 api_key=(args.vision_api_key or args.text_api_key),
                 api_base=args.vision_api_base,
                 model=args.vision_model,
+                concurrency=getattr(args, "vision_concurrency", 3),
+                max_pages=getattr(args, "max_pages", None),
             )
             if not vision_items:
                 tqdm.write(f"[!] Warning: vision model found no figures for format '{post_format}'.")
@@ -261,6 +263,8 @@ async def process_baseline_project(
                 api_key=(args.vision_api_key or args.text_api_key),
                 api_base=args.vision_api_base,
                 model=args.vision_model,
+                concurrency=getattr(args, "vision_concurrency", 3),
+                max_pages=getattr(args, "max_pages", None),
             )
             if not vision_items:
                 tqdm.write("[!] Warning: vision model found no figures for baseline with_figure.")
@@ -329,6 +333,8 @@ async def main():
     parser.add_argument("--text-model", type=str, default="gpt-4o", help="Model for text generation tasks.")
     parser.add_argument("--vision-model", type=str, default="gpt-4o", help="Model for vision-related tasks.")
     parser.add_argument("--concurrency", type=int, default=1, help="Maximum number of concurrent projects to process.")
+    parser.add_argument("--vision-concurrency", type=int, default=3, help="Concurrent vision calls when reading pages (default 3).")
+    parser.add_argument("--max-pages", type=int, default=None, help="Only read the first N pages with the vision model (default: all pages). Use to cap runtime/cost on long papers.")
 
     parser.add_argument(
         "--baseline-mode",

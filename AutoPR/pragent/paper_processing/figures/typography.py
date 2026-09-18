@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from statistics import median
-from typing import Iterable, Optional
+from typing import Iterable, Mapping, Optional
 import re
 
 import fitz
+
+from .page_evidence import PageEvidence
 
 
 _CAPTION_PREFIX_RE = re.compile(r"^(?:figure|fig\.?|table)\s+\d+\b", re.IGNORECASE)
@@ -64,7 +66,10 @@ def _iter_candidate_lines(doc: fitz.Document) -> Iterable[tuple[fitz.Page, dict,
                 yield page, line, text, len(text)
 
 
-def estimate_document_typography(doc: fitz.Document) -> TypographyProfile:
+def estimate_document_typography(
+    doc: fitz.Document,
+    page_evidence: Optional[Mapping[int, PageEvidence]] = None,
+) -> TypographyProfile:
     """Estimate dominant body typography using character-weighted evidence.
 
     Character weighting prevents short axis labels, headers and section numbers
@@ -79,9 +84,12 @@ def estimate_document_typography(doc: fitz.Document) -> TypographyProfile:
     line_gaps: list[float] = []
     total_chars = 0
 
-    for page in doc:
+    for page_num in range(len(doc)):
+        page = doc[page_num]
         height = page.mediabox.height
-        for block in page.get_text("dict").get("blocks", []):
+        evidence = page_evidence.get(page_num) if page_evidence is not None else None
+        text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
+        for block in text_dict.get("blocks", []):
             if block.get("type") != 0:
                 continue
             lines = block.get("lines", [])

@@ -8,6 +8,7 @@ from typing import Iterable, List, Optional, Sequence
 import fitz
 
 from .captions import Caption
+from .page_evidence import PageEvidence
 from .typography import TypographyProfile, normalize_font
 
 
@@ -71,14 +72,22 @@ def _intersection_ratio(a: fitz.Rect, b: fitz.Rect) -> float:
     return (inter.width * inter.height) / (a.width * a.height)
 
 
-def _visual_support(page: fitz.Page) -> List[fitz.Rect]:
+def _visual_support(
+    page: fitz.Page,
+    evidence: Optional[PageEvidence] = None,
+) -> List[fitz.Rect]:
     result: List[fitz.Rect] = []
     page_area = max(page.mediabox.width * page.mediabox.height, 1.0)
-    for block in page.get_text("dict").get("blocks", []):
+    text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
+    for block in text_dict.get("blocks", []):
         if block.get("type") == 1:
             result.append(fitz.Rect(block["bbox"]))
-    for drawing in page.get_drawings():
-        rect = fitz.Rect(drawing["rect"])
+    drawing_rects = (
+        evidence.get_drawing_rects(page)
+        if evidence is not None
+        else [fitz.Rect(drawing["rect"]) for drawing in page.get_drawings()]
+    )
+    for rect in drawing_rects:
         area = max(rect.width, 0.0) * max(rect.height, 0.0)
         if rect.width >= 8 and rect.height >= 4 and area <= page_area * 0.70:
             result.append(rect)
@@ -99,6 +108,7 @@ def classify_page_lines(
     profile: TypographyProfile,
     captions: Sequence[Caption] = (),
     page_num: Optional[int] = None,
+    evidence: Optional[PageEvidence] = None,
 ) -> List[TypedLine]:
     """Classify PDF text lines before they participate in visual clustering.
 
@@ -107,13 +117,14 @@ def classify_page_lines(
     blockers instead of accidental Figure evidence.
     """
 
-    visuals = _visual_support(page)
+    visuals = _visual_support(page, evidence)
     width = page.mediabox.width
     height = page.mediabox.height
     result: List[TypedLine] = []
     resolved_page_num = int(page_num if page_num is not None else getattr(page, "number", 0) or 0)
 
-    for block in page.get_text("dict").get("blocks", []):
+    text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
+    for block in text_dict.get("blocks", []):
         if block.get("type") != 0:
             continue
         for line in block.get("lines", []):

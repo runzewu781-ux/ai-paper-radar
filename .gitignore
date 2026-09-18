@@ -24,6 +24,7 @@ autopr_test_output/
 
 # generated artifacts (AutoPR / figure workflow)
 AutoPR/output/
+AutoPR/output_*/
 AutoPR/input/
 AutoPR/samples/generated/
 

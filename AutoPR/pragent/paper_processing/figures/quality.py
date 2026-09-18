@@ -6,6 +6,7 @@ from PIL import Image
 
 from .captions import Caption
 from .layout import PageLayout
+from .page_evidence import PageEvidence
 from .qa_metrics import CropMetrics, compute_crop_metrics
 from .text_types import TypedLine
 
@@ -64,6 +65,7 @@ def check_body_text_contamination(
     page: fitz.Page,
     bbox: fitz.Rect,
     caption: Optional[Caption] = None,
+    evidence: Optional[PageEvidence] = None,
 ) -> tuple[bool, int]:
     """Detect paragraph-like PDF text swallowed by a visual crop.
 
@@ -77,13 +79,18 @@ def check_body_text_contamination(
     page_area = max(page_rect.width * page_rect.height, 1.0)
     visual_support: List[fitz.Rect] = []
     table_rule_rects: List[fitz.Rect] = []
-    for block in page.get_text("dict")["blocks"]:
+    text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
+    for block in text_dict["blocks"]:
         if block.get("type") == 1:
             r = fitz.Rect(block["bbox"])
             if r.intersects(bbox):
                 visual_support.append(r)
-    for drawing in page.get_drawings():
-        r = fitz.Rect(drawing["rect"])
+    drawing_rects = (
+        evidence.get_drawing_rects(page)
+        if evidence is not None
+        else [fitz.Rect(drawing["rect"]) for drawing in page.get_drawings()]
+    )
+    for r in drawing_rects:
         area = max(r.width, 0.0) * max(r.height, 0.0)
         if (
             caption is not None
@@ -100,7 +107,7 @@ def check_body_text_contamination(
         ):
             visual_support.append(r)
 
-    for block in page.get_text("dict")["blocks"]:
+    for block in text_dict["blocks"]:
         if block.get("type") != 0:
             continue
         rect = fitz.Rect(block["bbox"])
@@ -198,6 +205,7 @@ def run_quality_checks(
     layout: Optional[PageLayout] = None,
     caption: Optional[Caption] = None,
     typed_lines: Optional[Sequence[TypedLine]] = None,
+    evidence: Optional[PageEvidence] = None,
 ) -> QualityResult:
     result = QualityResult()
 
@@ -234,7 +242,9 @@ def run_quality_checks(
         result.issues.append("truncated_at_edge")
 
     if page is not None:
-        contaminated, contaminated_chars = check_body_text_contamination(page, bbox, caption)
+        contaminated, contaminated_chars = check_body_text_contamination(
+            page, bbox, caption, evidence,
+        )
         if contaminated:
             result.has_body_text_contamination = True
             result.body_text_chars = contaminated_chars
@@ -248,6 +258,7 @@ def run_quality_checks(
                 typed_lines,
                 caption=caption,
                 column_boundary=layout.column_boundary if layout is not None else None,
+                evidence=evidence,
             )
             # Column mismatch is a structural hard gate. Body metrics remain
             # telemetry until calibrated on a larger labelled crop set; the

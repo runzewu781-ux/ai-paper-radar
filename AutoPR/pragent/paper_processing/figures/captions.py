@@ -1,8 +1,9 @@
 import re
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Mapping, Optional
 import fitz
 
+from .page_evidence import PageEvidence
 from .typography import TypographyProfile, normalize_font
 
 
@@ -152,13 +153,16 @@ def _caption_text_and_bbox(
 def find_captions(
     doc: fitz.Document,
     typography: Optional[TypographyProfile] = None,
+    page_evidence: Optional[Mapping[int, PageEvidence]] = None,
 ) -> List[Caption]:
     captions: List[Caption] = []
     seen = set()
 
     for page_num in range(len(doc)):
         page = doc[page_num]
-        blocks = page.get_text("dict")["blocks"]
+        evidence = page_evidence.get(page_num) if page_evidence is not None else None
+        text_dict = evidence.text_dict if evidence is not None else page.get_text("dict")
+        blocks = text_dict["blocks"]
 
         for block in blocks:
             if block.get("type") != 0:

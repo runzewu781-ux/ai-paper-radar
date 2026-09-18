@@ -1,10 +1,12 @@
 import unittest
+from unittest.mock import patch
 
 import fitz
 
-from pragent.paper_processing.figures.captions import Caption
+from pragent.paper_processing.figures.captions import Caption, find_captions
 from pragent.paper_processing.figures.layout import PageLayout, detect_layout
 from pragent.paper_processing.figures.matching import RegionProposal, resolve_page_assignments
+from pragent.paper_processing.figures.page_evidence import build_document_evidence
 from pragent.paper_processing.figures.qa_metrics import compute_crop_metrics
 from pragent.paper_processing.figures.text_types import TextType, classify_page_lines
 from pragent.paper_processing.figures.typography import estimate_document_typography
@@ -153,6 +155,52 @@ class DocumentLayoutEngineTests(unittest.TestCase):
             column_boundary=305,
         )
         self.assertEqual(metrics.column_consistency, 1.0)
+
+    def test_page_evidence_reuses_pdf_native_reads_across_pipeline_stages(self):
+        doc = self._doc()
+        page = doc.new_page(width=612, height=792)
+        page.insert_textbox(
+            fitz.Rect(70, 100, 540, 190),
+            (
+                "This is ordinary academic body text used to establish the document typography. "
+                "It contains enough words and punctuation to look like a normal paragraph. "
+            ) * 2,
+            fontsize=10,
+            fontname="Times-Roman",
+        )
+        page.draw_rect(fitz.Rect(100, 260, 500, 430), width=1)
+        page.insert_textbox(
+            fitz.Rect(100, 450, 500, 485),
+            "Figure 1: Cached evidence example.",
+            fontsize=9,
+            fontname="Times-Roman",
+        )
+
+        evidence_by_page = build_document_evidence(doc)
+        profile = estimate_document_typography(doc, evidence_by_page)
+        captions = find_captions(doc, profile, evidence_by_page)
+        evidence = evidence_by_page[0]
+        evidence.get_drawing_rects(page)
+
+        with patch.object(fitz.Page, "get_text", side_effect=AssertionError("unexpected PDF text reread")), patch.object(
+            fitz.Page, "get_drawings", side_effect=AssertionError("unexpected PDF drawing reread")
+        ):
+            typed = classify_page_lines(
+                page, profile, captions, page_num=0, evidence=evidence,
+            )
+            layout = detect_layout(page, profile, typed, evidence=evidence)
+            cap = captions[0]
+            metrics = compute_crop_metrics(
+                page,
+                fitz.Rect(100, 250, 500, 440),
+                typed,
+                caption=cap,
+                column_boundary=layout.column_boundary,
+                evidence=evidence,
+            )
+
+        self.assertGreater(len(typed), 0)
+        self.assertGreater(metrics.area_ratio, 0)
 
 
 if __name__ == "__main__":

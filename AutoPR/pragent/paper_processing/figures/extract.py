@@ -14,6 +14,7 @@ from .quality import run_quality_checks
 from .report import write_manifest, generate_contact_sheet
 from .classify import classify_image
 from .matching import RegionProposal, resolve_page_assignments
+from .page_evidence import build_document_evidence
 from .text_types import classify_page_lines
 from .typography import estimate_document_typography
 
@@ -39,28 +40,35 @@ async def run_extraction(
 
     doc = fitz.open(str(pdf_path))
     total_pages = len(doc)
+    page_evidence = build_document_evidence(doc)
 
-    typography = estimate_document_typography(doc)
+    typography = estimate_document_typography(doc, page_evidence)
     print(
         "[figure_extractor] Typography: "
         f"font={typography.body_font} size={typography.body_size:.1f} "
         f"gap={typography.body_line_gap:.1f} confidence={typography.confidence:.2f}"
     )
 
-    captions = find_captions(doc, typography)
+    captions = find_captions(doc, typography, page_evidence)
     print(f"[figure_extractor] Found {len(captions)} captions "
           f"({sum(1 for c in captions if c.kind == 'figure')} figures, "
           f"{sum(1 for c in captions if c.kind == 'table')} tables)")
 
+    captions_by_page: Dict[int, List[Caption]] = {}
+    for cap in captions:
+        captions_by_page.setdefault(cap.page_num, []).append(cap)
+
     layouts: Dict[int, PageLayout] = {}
     typed_lines: Dict[int, list] = {}
-    for page_num in range(total_pages):
-        page_captions = [c for c in captions if c.page_num == page_num]
+    for page_num, page_captions in captions_by_page.items():
+        evidence = page_evidence[page_num]
         typed_lines[page_num] = classify_page_lines(
             doc[page_num], typography, page_captions, page_num=page_num,
+            evidence=evidence,
         )
         layouts[page_num] = detect_layout(
             doc[page_num], typography, typed_lines[page_num],
+            evidence=evidence,
         )
 
     raw_proposals: Dict[tuple, RegionProposal] = {}
@@ -68,15 +76,16 @@ async def run_extraction(
     for cap in captions:
         page = doc[cap.page_num]
         layout = layouts[cap.page_num]
-        page_captions = [c for c in captions if c.page_num == cap.page_num]
+        page_captions = captions_by_page[cap.page_num]
         page_lines = typed_lines[cap.page_num]
+        evidence = page_evidence[cap.page_num]
         if cap.kind == "figure":
             bbox, confidence = locate_figure_content(
-                page, cap, layout, page_captions, page_lines,
+                page, cap, layout, page_captions, page_lines, evidence,
             )
         else:
             bbox, confidence = locate_table_content(
-                page, cap, layout, page_captions, page_lines,
+                page, cap, layout, page_captions, page_lines, evidence,
             )
         if bbox is None:
             continue
@@ -86,7 +95,7 @@ async def run_extraction(
 
     assigned_proposals: Dict[tuple, RegionProposal] = {}
     for page_num, proposals in proposals_by_page.items():
-        page_captions = [c for c in captions if c.page_num == page_num]
+        page_captions = captions_by_page[page_num]
         assigned_proposals.update(
             resolve_page_assignments(page_captions, proposals, layouts[page_num])
         )
@@ -97,7 +106,7 @@ async def run_extraction(
     for cap in captions:
         page = doc[cap.page_num]
         layout = layouts[cap.page_num]
-        page_captions = [c for c in captions if c.page_num == cap.page_num]
+        evidence = page_evidence[cap.page_num]
 
         key = (cap.kind, cap.number, cap.page_num)
         proposal = assigned_proposals.get(key)
@@ -124,6 +133,7 @@ async def run_extraction(
             layout=layout,
             caption=cap,
             typed_lines=typed_lines[cap.page_num],
+            evidence=evidence,
         )
 
         visual_type = cap.kind
