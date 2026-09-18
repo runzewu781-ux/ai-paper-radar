@@ -1,6 +1,6 @@
 # prompts_wechat.py
 # 微信公众号长文 prompt 套件（干净版卡兹克风格）。
-# 与 prompts.py 中的 twitter / xiaohongshu / generic 路径完全隔离，互不影响。
+# 与 prompts.py 中的结构化草稿 prompt 完全隔离，互不影响。
 # 风格参照：khazix-writer skill（数字生命卡兹克），但去掉粗口与颜文字标点，
 # 适配"科普公众号"这一更体面的发布场景。
 

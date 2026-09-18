@@ -135,54 +135,50 @@ chmod +x scripts/calc_results.sh
 ./scripts/calc_results.sh
 ```
 
-## 🕹️ 6. PRAgent Generation
+## 🕹️ 6. End-to-end Article Generation
 
-![](assets/images/pragent.png)
-### 6.1 Step 1: Preparation
+The pipeline generates one Chinese WeChat-style long-form article from a single paper PDF.
 
-No layout-detection model is required. Figures and tables are read directly from each rendered page by a vision-language model (the previous YOLO-based cropping step has been removed, so there is no `.pt` weight to download).
-
-Configure your LLM endpoint in `.env` (OpenAI-compatible `OPENAI_API_BASE` + `OPENAI_API_KEY`). The CLI defaults to `gpt-4o`, so pass your actual model explicitly, e.g.:
+### 6.1 Run
 
 ```bash
-python3 pragent/run.py --input-dir ./papers --output-dir ./out \
-    --text-model qwen3.8-max-preview --vision-model qwen3.8-max-preview
+python pragent/quality/generate_article.py <pdf> <out>
 ```
 
-### 6.2 Step 2: Generate Promotional Posts (PRAgent)
+Optional flags:
 
+| Flag | Meaning |
+| --- | --- |
+| `--model` | Model ID. Defaults to `AUTOPR_MODEL`, falling back to `gemini-3.7-flash`. |
+| `--style <style.json>` | Inject a distilled writing style (output of `style_distill`). |
+| `--ai-tone-threshold` | Risk-score threshold that triggers selective AI-tone rewriting. Default `35`. |
+| `--skip-less-ai-tone` | Skip local-detector-driven selective AI-tone reduction. |
+| `--visual-mode` | `original` (default, paper figures as-is) / `skill` / `legacy`. |
+| `--skill-visual KEY=PATH` | Pre-built visual asset, e.g. `figure_5=C:/x/figure5.html`. Only used with `--visual-mode skill`. |
+| `--flow-redraw NUM=PATH` | Redraw a flowchart, e.g. `4=C:/x/fig4.png`. |
 
+### 6.2 Credentials
 
-First, prepare your input directory. The script automatically determines the target platform based on the **folder name**:
+Two credential sources are resolved at runtime, in priority order:
 
-* **Numeric** folder name -\> **Twitter (English)**
-* **Alphanumeric** folder name -\> **Xiaohongshu (Chinese)**
+1. `BAILIAN_KEY` (+ optional `BAILIAN_BASE`) from the environment.
+2. Local Antigravity proxy config at `~/.antigravity_tools/gui_config.json`, exposing an
+   OpenAI-compatible endpoint on `http://127.0.0.1:<port>/v1`.
 
-<!-- end list -->
+No layout-detection model is required. Figures and tables are read directly from each rendered
+page by a vision-language model (the previous YOLO-based cropping step has been removed, so
+there is no `.pt` weight to download).
 
-```python
-/path/to/your/papers/
-├── 12345/               # Numeric -> will generate a Twitter-style post in English
-│   └── paper.pdf
-└── some_paper_name/     # Alphanumeric -> will generate a Xiaohongshu-style post in Chinese
-    └── paper.pdf
-```
+### 6.3 Pipeline Stages
 
-If you have run ``download_and_reconstruct.py``, you can use the ``papers`` folder as input
+Text extraction → figure extraction & classification → WeChat draft → citation weaving →
+full-text fact conservation → local detector QA (×3) → selective AI-tone reduction → second
+fact audit. Every numeric claim is bound to an exact PDF page, bounding box and `text_hash`
+via the `research_brief` module.
 
-Next, configure and run the generation script.
-```bash
-chmod +x scripts/run_pragent.sh
-./script/run_generation.sh
-```
-
-
-### PRAgent Case
-**Baseline:**
-![](assets/images/case-1.png)
-
-**PRAgent:**
-![](assets/images/case-2.png)
+Outputs land in `<out>/`: `paper.txt`, `draft.md`, `article_grounded.md`, `fact_audit.json`,
+`ai_tone_before.json`, `ai_tone_after.json`, `less_ai_tone.json`,
+`fact_audit_after_humanize.json`, `recon.json`, `article.md`.
 
 ## ☎️ Contact
 If interested in our work, please contact us at:
